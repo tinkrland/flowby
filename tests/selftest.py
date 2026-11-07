@@ -532,12 +532,57 @@ class BoardScope(unittest.TestCase):
         preset = presets.get("surface-detail")
         self.assertEqual([c[0] for c in preset.sliders["detail"].choices],
                          ["crease", "stitch", "emboss", "deboss"])
+
+    def test_surface_detail_is_a_diffusion_pass_and_not_a_carve(self):
+        """the correction: crease and stitch are models doing the work, not a carved edge.
+
+        so the choice has to arrive at a node as a prompt fragment, and the geometry node after it
+        only applies the map that came back. a preset that carved it directly would be pretending
+        to be cheaper than it is and worse at the job.
+        """
         scene = Scene()
         bust = scene.add("model", "bust", asset=MODEL_ASSET)
         scene.apply(bust.id, "surface-detail", {"detail": "deboss", "depth": 0.2})
-        carve = scene.graph.nodes["model-1/surface-detail/carve"]
-        self.assertEqual(carve.params["detail"], "deboss")
-        self.assertAlmostEqual(carve.params["depth"], 0.2)
+        paint = scene.graph.nodes["model-1/surface-detail/paint"]
+        relief = scene.graph.nodes["model-1/surface-detail/relief"]
+        self.assertIn("recess", paint.params["prompt"], "the model gets a sentence, not a mode")
+        self.assertIn("flux-depth-lora", paint.requires["models"])
+        self.assertAlmostEqual(relief.params["depth"], 0.2)
+        self.assertNotIn("models", relief.requires, "applying a map is geometry, not inference")
+
+
+class Models(unittest.TestCase):
+    """every preset either calls a model or says why it does not."""
+
+    def test_no_preset_hides_an_absence_of_models(self):
+        census = presets.model_census()
+        for name, models in census.items():
+            if models:
+                continue
+            self.assertIn(name, presets.PROCEDURAL,
+                          f"{name} names no model and gives no reason, which is the shape of a "
+                          f"preset that quietly does nothing")
+
+    def test_every_excuse_is_a_reason_and_not_a_placeholder(self):
+        for name, reason in presets.PROCEDURAL.items():
+            self.assertIn(name, presets.PRESETS, f"{name} is excused and does not exist")
+            self.assertGreater(len(reason.split()), 6, f"{name}'s reason is not a sentence")
+
+    def test_the_models_are_named_where_a_person_would_look_for_them(self):
+        readme = (ROOT / "readme.md").read_text().lower()
+        for name, models in presets.model_census().items():
+            for model in models:
+                self.assertIn(model.lower(), readme,
+                              f"{model} runs {name} and the readme does not say so")
+
+    def test_the_two_products_were_right_about_this(self):
+        """both reference catalogues name surfaces and run models. the census is that sentence
+        as a thing a test can hold: six of nine presets are model calls, and the three that are
+        not are shading maths, a camera move, and your own code."""
+        census = presets.model_census()
+        called = [name for name, models in census.items() if models]
+        self.assertEqual(len(called), 6)
+        self.assertEqual(sorted(set(census) - set(called)), sorted(presets.PROCEDURAL))
 
 
 class Sweeps(unittest.TestCase):

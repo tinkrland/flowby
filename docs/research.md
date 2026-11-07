@@ -105,7 +105,7 @@ grid. both then ask you to pick one and keep going.
 both are from vectary's own preset marketing, and together they answer a question the landing page
 only gestures at: *what* is in the catalogue, and *why* a preset rather than a prompt.
 
-### the presets are organised by surface, not by model
+### the presets are named after surfaces and run models
 
 four families, each with a demo video attached:
 
@@ -118,9 +118,16 @@ four families, each with a demo video attached:
 * **design and ideation**: rough sketches into photoreal visuals, mapping geometric patterns,
   generating 3d variations from 2d layers, replacing a specific object in a frame.
 
-that list is a designer's vocabulary, not a model list. crease and stitch are things you do to a
-garment; "extract a normal map" is something you do to a material. nothing in it names a model, and
-every entry could be answered by a person who has never heard of the model behind it.
+that list is a designer's vocabulary, and **every entry is a model call underneath it.** this was
+written down wrongly here first, as "named after surfaces, not by model", and the correction matters
+because it changes what the architecture has to be: crease and stitch are **diffusion passes** that
+produce a detail map, not a carved edge. "extract a normal map" is a model. even the material family,
+generate and test physical pbr textures, is inference rather than arithmetic.
+
+so the surface words are not a substitute for the models. they are the **interface on top of them**:
+337 models behind nine words a designer already had. the names are the wrapper and the models are
+the product, which is the same bet this tree makes, and it means a preset with no model in it is
+making a claim rather than saving money.
 
 ### their benefits table is this tree's architecture, one row short
 
@@ -139,14 +146,22 @@ cheap applications.
 
 `Preset.scope`, as a `shared_seam` and a `tail_port`. `studio-light` is the board preset: one
 lighting reference frame, graded onto every frame you point at it, so three frames cost one style
-read and three grades. `surface-detail` is the catalogue made concrete: crease, stitch, emboss,
-deboss, as a choice control on one mesh node.
+read and three grades.
+
+and once the family turned out to be models rather than maths, `surface-detail` got rebuilt from two
+nodes into three: read the surface, **paint a detail map from a sentence** (`flux-depth-lora`), then
+displace the geometry with that map. the choice control now carries a prompt fragment, so `deboss`
+arrives at the model as "a recess cut into the surface, as in a stamped logo" instead of as a mode
+name nobody was going to read.
 
 two details worth keeping in mind from their framing rather than their mechanism:
 
 * **the videos are per feature, not per product.** four families, four demos. a preset that needs a
   video to explain itself is a preset whose name is not doing its job, and that is a reason to keep
   the labels as sentences.
+* **the model is the product and the word is the door.** 337 models, four families, nine words. the
+  moment a preset is named after the model instead of the task, the catalogue has to be read by
+  somebody who already knows the models, which is the audience it was built to avoid.
 * **nothing in their copy mentions a node graph, and the graph is still there.** the user's summary
   of it was exact: it is a node canvas whose nodes are premade presets. the abstraction is the
   product and the graph is the honesty underneath it, which is the same bet this tree makes.

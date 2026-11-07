@@ -55,17 +55,17 @@ the other half of the palette is the refusal: **nothing coerces**. an image does
 
 every preset below is task-named, because the unit a person thinks in is the task and not the model. every one is in state `designed`: the graphs wire and refuse correctly, and **no asset has come back from a worker yet**.
 
-| preset | reads | writes | stage | nodes | controls |
-| --- | --- | --- | --- | --- | --- |
-| `text-to-image` | amber | green | explore | 2 | 3 |
-| `sketch-to-mesh` | green | red | explore | 3 | 3 |
-| `frosted-glass` | red | red | refine | 2 | 3 |
-| `style-transfer` | green | green | explore | 2 | 2 |
-| `animate-composition` | red | blue | output | 3 | 3 |
-| `relight` | green | green | explore | 2 | 2 |
-| `studio-light` | green | green | refine | 2 | 2 |
-| `surface-detail` | red | red | refine | 2 | 2 |
-| `code-container` | green | green | refine | 1 | 0 |
+| preset | model | reads | writes | stage | nodes | controls |
+| --- | --- | --- | --- | --- | --- | --- |
+| `text-to-image` | sdxl-turbo | amber | green | explore | 2 | 3 |
+| `sketch-to-mesh` | triposr | green | red | explore | 3 | 3 |
+| `frosted-glass` | none: shading maths | red | red | refine | 2 | 3 |
+| `animate-composition` | none: a camera and a render | red | blue | output | 3 | 3 |
+| `style-transfer` | ip-adapter | green | green | explore | 2 | 2 |
+| `relight` | ic-light | green | green | explore | 2 | 2 |
+| `studio-light` | ic-light | green | green | refine | 2 | 2 |
+| `surface-detail` | flux-depth-lora | red | red | refine | 3 | 2 |
+| `code-container` | none: your own code | green | green | refine | 1 | 0 |
 
 three things about that table are load bearing.
 
@@ -81,7 +81,9 @@ three things about that table are load bearing.
 
 that is the only place the two scopes differ. everything else about a board preset behaves like the rest of this tree: it chains off what each frame is showing, it refuses a frame on the wrong wire, and it can be broken apart into the same nodes.
 
-**the catalogue is named after surfaces, not models.** `surface-detail` offers crease, stitch, emboss and deboss, because "which thing do you want done to this mesh" is a question a designer can answer and "which of 169 video models" is not.
+**the catalogue is named after surfaces and runs models.** this was wrong here for a round, and the correction is the interesting part: crease, stitch, emboss and deboss are **diffusion passes**, not a carved edge. `surface-detail` is therefore a model painting a depth map from a sentence (`flux-depth-lora`) and then a geometry node applying it, and the choice arrives at the model as a prompt fragment rather than as a mode name.
+
+that is the whole trick both products sell: *crease* is a word a designer already has, and behind it sits a model nobody had to choose between. the words are the interface, the models are the product. `presets.PROCEDURAL` is the written list of the three presets that genuinely need no model (shading maths, a camera move, your own code), so an absence of models is always a claim somebody made rather than something discovered later, and `bin/flowby presets` prints the model next to the name.
 
 **one preset cannot fill its own inputs, and says so.** `style-transfer` needs a second asset, the look it copies. it spawns with an empty slot, refuses to compile while the slot is empty, and the refusal names the slot. filling it is `scene.link`, which is one drag in the node view.
 

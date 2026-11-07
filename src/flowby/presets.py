@@ -787,7 +787,7 @@ register(Preset(
     input_dtype="mesh",
     entry="read",
     entry_port="geometry",
-    sink="carve",
+    sink="relief",
     stage="refine",
     steps={
         "read": Step(
@@ -798,16 +798,25 @@ register(Preset(
             params={"resolution": 1024},
             requires={"pip": ["trimesh", "pillow"], "minutes": 0.3},
         ),
-        "carve": Step(
-            op="mesh.detail",
-            label="carve the detail",
-            inputs={"geometry": Port("mesh"), "guide": image("depth")},
+        "paint": Step(
+            op="detail.paint",
+            label="paint the detail map",
+            inputs={"guide": image("depth")},
+            outputs={"map": image("depth")},
+            params={"prompt": "soft folds, as in cloth that has been worn", "strength": 0.7},
+            requires={"models": ["flux-depth-lora"], "gpu": True, "minutes": 1.4},
+        ),
+        "relief": Step(
+            op="mesh.relief",
+            label="apply the relief",
+            inputs={"geometry": Port("mesh"), "map": image("depth")},
             outputs={"out": Port("mesh")},
-            params={"detail": "crease", "depth": 0.6, "width": 0.4},
-            requires={"pip": ["trimesh"], "gpu": True, "minutes": 0.8},
+            params={"depth": 0.6, "width": 0.4},
+            requires={"pip": ["trimesh"], "minutes": 0.6},
         ),
     },
-    edges=(("read", "out", "carve", "geometry"), ("read", "guide", "carve", "guide")),
+    edges=(("read", "out", "relief", "geometry"), ("read", "guide", "paint", "guide"),
+           ("paint", "map", "relief", "map")),
     sliders={
         "detail": Slider(
             name="detail", label="detail", low=0.0, high=3.0, default="crease",
@@ -815,20 +824,43 @@ register(Preset(
             means=("crease cuts soft folds into it, as in worn cloth. stitch lays a tailored line "
                    "along a seam. emboss raises a patch. deboss cuts the same shape in."),
             choices=(
-                ("crease", "crease"),
-                ("stitch", "stitch"),
-                ("emboss", "emboss"),
-                ("deboss", "deboss"),
+                ("crease", "soft folds, as in cloth that has been worn"),
+                ("stitch", "tailored stitch lines running along a seam"),
+                ("emboss", "a raised patch, as in moulded leather"),
+                ("deboss", "a recess cut into the surface, as in a stamped logo"),
             ),
-            targets=(Target("carve", "detail"),),
+            targets=(Target("paint", "prompt"),),
         ),
         "depth": Slider(
             name="depth", label="depth", low=0.0, high=1.0, default=0.6,
             means="how far the detail sits off or into the surface.",
-            targets=(Target("carve", "depth"),),
+            targets=(Target("relief", "depth"),),
         ),
     },
 ))
+
+
+PROCEDURAL = {
+    "frosted-glass": "shading maths on a material, which is arithmetic rather than inference",
+    "animate-composition": "a camera move and a render, which is exactly what they say they are",
+    "code-container": "your own code, which is the one thing a model should not be guessing at",
+}
+
+
+def model_census() -> dict[str, list[str]]:
+    """which preset calls which model, and which ones honestly do not.
+
+    the correction that produced this: both reference products name their presets after surfaces
+    and *run models*. crease and stitch are diffusion passes, not a carved edge. so a preset that
+    names no model is making a claim, and it has to say which claim in PROCEDURAL rather than
+    leaving the absence to be discovered later.
+    """
+    census = {}
+    for name, preset in PRESETS.items():
+        models = sorted({m for step in preset.steps.values()
+                         for m in (step.requires.get("models") or [])})
+        census[name] = models
+    return census
 
 
 def legend() -> dict:
@@ -840,6 +872,8 @@ def legend() -> dict:
              "from": p.input_dtype, "to": p.out_dtype(),
              "state": p.state, "nodes": len(p.steps),
              "controls": len(p.sliders), "stage": p.stage,
+             "models": sorted({m for s in p.steps.values()
+                               for m in (s.requires.get("models") or [])}),
              "variants": len(p.sweep.values) if p.sweep else 1,
              "estimate": p.estimate()["minutes"]}
             for p in PRESETS.values()

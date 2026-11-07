@@ -48,12 +48,15 @@ def cmd_presets(args) -> int:
     if args.json:
         print(json.dumps(presets.legend(), indent=2))
         return 0
-    print(f"{'preset':22} {'wire':14} {'nodes':>5} {'controls':>8}  state")
+    print(f"{'preset':17} {'wire':14} {'model':18} {'nodes':>5} {'controls':>8}  state")
     for line in presets.legend()["presets"]:
         wire = f"{dtypes.colour(line['from'])}->{dtypes.colour(line['to'])}"
-        print(f"{line['name']:22} {wire:14} {line['nodes']:>5} {line['controls']:>8}  {line['state']}")
+        model = ", ".join(line["models"]) or "no model (see PROCEDURAL)"
+        print(f"{line['name']:17} {wire:14} {model:18} {line['nodes']:>5} "
+              f"{line['controls']:>8}  {line['state']}")
     print("\nevery preset is designed: the graphs wire and refuse correctly, and no asset has "
-          "come back from a worker yet.")
+          "come back from a worker yet. every preset either names the model it calls or says, in "
+          "PROCEDURAL, why it does not need one.")
     return 0
 
 

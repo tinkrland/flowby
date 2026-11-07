@@ -40,7 +40,8 @@ UNIMPLEMENTED = {
     "light.study": "ic-light weights",
     "light.grade": "ic-light weights",
     "mesh.read": "trimesh, to bake a depth guide",
-    "mesh.detail": "trimesh, to cut geometry",
+    "mesh.relief": "trimesh, to displace from a map",
+    "detail.paint": "a depth-conditioned diffusion pass",
 }
 
 ELEMENT = "element."
