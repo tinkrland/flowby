@@ -49,6 +49,7 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
   theidea/
     main.md                     the owner's brief, kept as written
     decisions.md                the decisions this tree makes on top of it
+    taxonomy.md                 the seven kinds (style, tool, technique, preset, recipe, workflow, factory); proposed
   journal/
     2026-11-07.md               the day the board existed and the graph under it
     2026-11-07-what-the-videos-showed.md

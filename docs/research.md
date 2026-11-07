@@ -236,6 +236,34 @@ what was *not* seen: the vectary canvas launch video (youtube.com/watch?v=5KhZKz
 page loads and the thumbnail is visible, but playback did not start in the browser session and the
 embed player refused with error 153. the vectary pages above are still read as text, not watched.
 
+## the vectary canvas launch video, actually watched
+
+the page embeds one vimeo video (id 1216133325, 2:17, 1920x1080, looped and muted). its hls stream
+was pulled with ffmpeg and sampled every 4 seconds into three contact sheets, then the key frames
+were opened at full size and looked at. the youtube trailer (5KhZKzW67PU) would not play in the
+browser session, so this is the same product from the source instead. seen, not read:
+
+* **the same move repeats across five products** (mouse, binoculars, car vents, hiking shoe, spray
+  bottle): one reference, then a grid of parallel variants, then one picked and enlarged. the grid
+  is the unit of work, which is what `Preset.sweep` already does.
+* **a preset is a card with a thumbnail, a name and one line.** "Recreate graphics to flat 2D:
+  extract graphic from products into completely flat 2D design", with a picture of what it does. the
+  picker is a small floating panel with tabs (All, Images, Text, 3D, Custom) and a search field.
+* **a node is also an editor.** a selected image grows a floating toolbar under it (lasso, two ai
+  brushes, delete, confirm), so refinement happens on the node, not in a separate screen.
+* **a node can be a live 3D scene.** the last frames show a spray bottle as an embedded vectary
+  scene with dimension callouts and an **AR** badge, so the spatial side is real 3D, not pictures.
+* **references and people share the canvas.** stool photos with a purple sticky note ("love this
+  minimal design"), named frames ("shape exploration", "CAD views"), a collaborator avatar on a
+  selected node, and a top-right Share. the research step is a board you pin things to.
+* **the properties panel is a column of sliders** (material, roughness-style values) on the right,
+  opened by selecting a node. nothing is modal.
+* **light canvas, purple selection.** pale grey dot grid, a single violet outline for the selected
+  node, white cards with soft shadows. flowby takes the structure and keeps its own dark palette.
+
+not recovered: the studio base44 style transfer flow. `studio.base44.com` redirects to an sso login
+that renders blank without a signed-in session, and there is no credential in this environment.
+
 ## base44 studio: the third idiom, /tools
 
 studio.base44.com is base44's own alpha and the closest thing to the third instinct: bring a
