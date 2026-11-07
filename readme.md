@@ -2,6 +2,8 @@
 
 *one board, two views, and the graph was never hidden*
 
+`github.com/tinkrland/flowby`
+
 flowby is a creative studio built on a single claim: the spatial layer and the node layer are the same workspace seen twice. you click a sketch, a sidebar opens with presets written in the language of the thing you are making ("convert sketch to 3d mesh", "apply matte frosted glass"), you drag one slider, and the pixels change. underneath, a subgraph got spawned, wired and left visible. there is a toggle that shows it.
 
 the reason to build this rather than another node editor is the order of the two views. most graph tools make you assemble a pipeline before you can see anything, which is a fine way to think and a terrible way to start. the reason to build it rather than another canvas tool is that a canvas with presets and no graph becomes a slot machine: you cannot see what ran, you cannot fix it, and you cannot take it with you. flowby is the wager that both halves are cheap if you are willing to say out loud that a preset **is** a graph.
