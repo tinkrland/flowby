@@ -131,7 +131,32 @@ the owner picks one:
 what is not on loan is the node layer: **@xyflow/react and @dagrejs/dagre are MIT, with no version
 of this question.**
 
-## 12. what is not decided here
+## 12. motion is the smoothness layer, and reduced motion is not optional
+
+**motion** (Framer Motion 14, MIT) animates the node layer, and the spec lives in
+`web/src/anim.mjs` as data rather than in the component as numbers, for the same reason the wire
+colours live in `wires.mjs`: a spec is a pure function with a test, and a component that hardcodes
+`stiffness: 420` is a component nobody can check.
+
+what "smooth" turned out to mean, concretely, and why each piece is not decoration:
+
+* **stagger by rank.** nodes arrive left to right at 18ms per rank, capped at 180ms, because that is
+  the direction execution flows. a 20-rank chain that animates in sequence for a second reads as a
+  slow app, not a smooth one, which is why the cap is tested.
+* **springs for touch, tweens for lines.** a spring settles where the pointer leaves it; a fixed
+  duration snaps. mixing the two in one transition throws in motion, so the test asserts the spring
+  carries no duration.
+* **wires draw themselves** (`pathLength` 0 to 1). it is the cheapest way to say "these two are now
+  connected", and it is the one thing a screenshot cannot show, so the edge is tested as a spec.
+* **prefers-reduced-motion returns no animation at all**, not a faster one. three of the eight tests
+  in `web/tests/anim.test.mjs` exist only to enforce that.
+
+cost, measured rather than assumed: the full `motion` import took the bundle from 388 kB to 519 kB.
+the slim entry (`m` + `LazyMotion` + `domAnimation`, `strict`) brings it to 480 kB, and motion's
+engine then loads after first paint. the remaining ~90 kB buys every animation in the product, which
+is the right trade for a canvas that is the product; it would not be for a marketing page.
+
+## 13. what is not decided here
 
 the licence. whether boards are multiplayer. whether a preset can be authored by a user inside the product, which both products in `docs/research.md` are moving toward and which is a different product surface than shipping six of them.
 

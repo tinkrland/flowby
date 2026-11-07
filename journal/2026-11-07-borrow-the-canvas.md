@@ -33,4 +33,20 @@ the canvas builds (`tsc --noEmit`, `vite build`, 388 kB) and 12 node tests cover
 
 then it was actually rendered and screenshotted: 7 nodes, 5 wires, 12 handles, minimap and controls, the owl's chain in green and red and the caption's text wire in amber. a build passing is not proof that a canvas drew something.
 
-123 python, 20 node.
+## the smoothness layer, added later the same evening
+
+the owner asked for **motion** (Framer Motion 14, MIT) on top, having first called it "freavy", which
+turned out to be nothing on npm or github and resolved, once asked, to this. so the canvas animates:
+nodes rise into place staggered by rank, wires draw themselves from source to target, and a node
+lifts two pixels under the pointer on a spring.
+
+the spec is data in `web/src/anim.mjs`, not numbers in the component, because an animation cannot be
+asserted from a screenshot and can absolutely be asserted as a pure function. three of its eight
+tests exist for one requirement: **prefers-reduced-motion means no animation, not a faster one**, and
+that is the only way that requirement survives contact with a future refactor.
+
+the cost was measured, not waved through. full `motion` took the bundle 388 -> 519 kB; the slim entry
+(`m` + `LazyMotion` + `domAnimation`, strict) brought it to 480 kB with motion's engine loading after
+first paint. worth it here, where the canvas is the product.
+
+123 python, 28 node.

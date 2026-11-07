@@ -152,6 +152,11 @@ bezier maths and hit-testing. python stopped emitting pixel positions the day da
 two layout systems disagree by default and a node a person dragged was lost on the next render. the
 graph now reports `rank` and `row`, and geometry has exactly one owner.
 
+**motion** (Framer Motion, MIT) makes it move: nodes enter staggered by their depth in the graph,
+wires draw themselves from source to target, and anything a pointer touches settles on a spring. the
+numbers live in `web/src/anim.mjs` so they can be tested without a DOM, and `prefers-reduced-motion`
+turns every one of them off rather than shortening them.
+
 the seam is testable from node with no DOM, which is the point of `web/src/graph.mjs`: the browser's
 palette is compared against `bin/flowby --json legend`, a wire into a port that does not exist
 refuses by name, the layout is deterministic across runs, and no two nodes overlap.
@@ -191,6 +196,7 @@ those numbers are fields on the route, not prose, which is the point: `routes.fi
 | the tldraw + r3f camera alignment | verified | `node --test web/tests/align.test.mjs` |
 | the node canvas: palette, wires, layout, refusals | verified | `node --test web/tests/graph.test.mjs` |
 | the node canvas actually drawing | verified | headless chrome: 7 nodes, 5 wires, 12 handles |
+| the motion spec, including reduced motion | verified | `node --test web/tests/anim.test.mjs` |
 | the spatial canvas being shippable | **licence** | tldraw is source-available, not open source; decision 11 |
 | the react binding | designed | no `node_modules` in this checkout |
 | fastapi, celery, browserbase | designed | imports guarded, `python3 -m app.main` says so |

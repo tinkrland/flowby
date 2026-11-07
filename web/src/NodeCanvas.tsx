@@ -15,7 +15,6 @@
  */
 
 import {
-  BaseEdge,
   Background,
   BackgroundVariant,
   Controls,
@@ -29,9 +28,11 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { LazyMotion, domAnimation, m, useReducedMotion } from "motion/react";
 import { useMemo } from "react";
 
 import { cameraFromTldraw } from "./align.mjs";
+import { nodeEnter, nodeHover, wireDraw } from "./anim.mjs";
 import { NODE_W, toFlow } from "./graph.mjs";
 import { wireFor } from "./wires.mjs";
 
@@ -102,15 +103,20 @@ function Shell({
   title,
   subtitle,
   accent,
+  rank,
   children,
 }: {
   title: string;
   subtitle: string;
   accent: string;
+  rank: number;
   children: React.ReactNode;
 }) {
+  const reduced = useReducedMotion() ?? false;
   return (
-    <div
+    <m.div
+      {...nodeEnter(rank, { reduced })}
+      {...nodeHover({ reduced })}
       style={{
         width: NODE_W,
         borderRadius: 10,
@@ -120,14 +126,17 @@ function Shell({
         color: "#e4e4e7",
         font: "500 12px/1.3 ui-sans-serif, system-ui, sans-serif",
         overflow: "hidden",
+        willChange: "transform",
       }}
     >
       <div style={{ padding: "8px 12px 6px" }}>
         <div style={{ fontSize: 12 }}>{title}</div>
-        <div style={{ fontSize: 10, color: "#71717a", marginTop: 2 }}>{subtitle}</div>
+        <div style={{ fontSize: 10, color: "#71717a", marginTop: 2 }}>
+          {subtitle}
+        </div>
       </div>
       {children}
-    </div>
+    </m.div>
   );
 }
 
@@ -136,12 +145,15 @@ export function OpNode({ data }: NodeProps) {
   const inputs = Object.entries(data.inputs as Record<string, Port>);
   const outputs = Object.entries(data.outputs as Record<string, Port>);
   const accent = inputs[0] ? wireFor(inputs[0][1].dtype).hex : "#52525b";
-  const swept = Object.keys((data.params as Record<string, unknown>) ?? {}).length;
+  const swept = Object.keys(
+    (data.params as Record<string, unknown>) ?? {},
+  ).length;
   return (
     <Shell
       title={String(data.label)}
       subtitle={`${String(data.op)}${swept ? ` · ${swept} params` : ""}`}
       accent={accent}
+      rank={Number(data.rank) || 0}
     >
       {inputs.map(([name, port], i) => (
         <PortRow key={name} name={name} port={port} side="in" index={i} />
@@ -157,7 +169,12 @@ export function OpNode({ data }: NodeProps) {
 export function ElementNode({ data }: NodeProps) {
   const outputs = Object.entries(data.outputs as Record<string, Port>);
   return (
-    <Shell title={String(data.label)} subtitle={String(data.op)} accent="#52525b">
+    <Shell
+      title={String(data.label)}
+      subtitle={String(data.op)}
+      accent="#52525b"
+      rank={Number(data.rank) || 0}
+    >
       {outputs.map(([name, port], i) => (
         <PortRow key={name} name={name} port={port} side="out" index={i} />
       ))}
@@ -175,6 +192,7 @@ export function WireEdge({
   targetPosition,
   data,
 }: EdgeProps) {
+  const reduced = useReducedMotion() ?? false;
   const [path] = getBezierPath({
     sourceX,
     sourceY,
@@ -185,8 +203,10 @@ export function WireEdge({
   });
   const dashed = Boolean(data?.dashed);
   return (
-    <BaseEdge
-      path={path}
+    <m.path
+      className="react-flow__edge-path"
+      d={path}
+      {...wireDraw({ reduced })}
       style={{
         stroke: String(data?.hex ?? "#52525b"),
         strokeWidth: 1.5,
@@ -211,27 +231,45 @@ export function NodeCanvas({ pipeline, onCameraChange }: NodeCanvasProps) {
   const flow = useMemo(() => toFlow(pipeline), [pipeline]);
 
   return (
-    <ReactFlow
-      nodes={flow.nodes}
-      edges={flow.edges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      fitView
-      minZoom={0.15}
-      maxZoom={2}
-      snapToGrid
-      snapGrid={[8, 8]}
-      panOnScroll
-      // the board is the product: dragging a node is a view preference, not data, so it stays
-      // local until positions are something python is willing to store
-      nodesDraggable
-      onMove={(_event: unknown, viewport: Viewport) => {
-        onCameraChange?.(cameraFromTldraw({ x: viewport.x, y: viewport.y, z: viewport.zoom }));
-      }}
-    >
-      <Background variant={BackgroundVariant.Lines} gap={24} size={1} color="#1c1c1f" />
-      <Controls showInteractive={false} />
-      <MiniMap pannable zoomable maskColor="rgba(9,9,11,0.85)" nodeStrokeWidth={2} />
-    </ReactFlow>
+    <LazyMotion features={domAnimation} strict>
+      <ReactFlow
+        nodes={flow.nodes}
+        edges={flow.edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        fitView
+        minZoom={0.15}
+        maxZoom={2}
+        snapToGrid
+        snapGrid={[8, 8]}
+        panOnScroll
+        // the board is the product: dragging a node is a view preference, not data, so it stays
+        // local until positions are something python is willing to store
+        nodesDraggable
+        onMove={(_event: unknown, viewport: Viewport) => {
+          onCameraChange?.(
+            cameraFromTldraw({
+              x: viewport.x,
+              y: viewport.y,
+              z: viewport.zoom,
+            }),
+          );
+        }}
+      >
+        <Background
+          variant={BackgroundVariant.Lines}
+          gap={24}
+          size={1}
+          color="#1c1c1f"
+        />
+        <Controls showInteractive={false} />
+        <MiniMap
+          pannable
+          zoomable
+          maskColor="rgba(9,9,11,0.85)"
+          nodeStrokeWidth={2}
+        />
+      </ReactFlow>
+    </LazyMotion>
   );
 }
