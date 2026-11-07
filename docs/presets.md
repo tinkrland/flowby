@@ -58,6 +58,36 @@ two rules a slider has to obey, both enforced at import and both tested:
 * its default must project. a choice slider defaulting to `0` is a typo that makes every application of the preset throw, so `Slider.__post_init__` refuses it while the module is loading.
 * its targets must exist. `Preset.__post_init__` checks every target against the step's params, so a renamed parameter fails at import instead of at the third click.
 
+## when a bullet is a preset and when it is a slider
+
+a catalogue arrives as a tree four levels deep and flowby is three, so the first job on any new
+bullet is deciding which level it belongs to. the test is not "does it feel like a feature":
+
+**a bullet is a preset if it changes what the graph produces. it is a control if it changes a number
+or a word the same graph already takes.**
+
+`roughness intensity` changes a number the pbr node already takes, so it is a slider. `normal maps`
+looks like a preset and is not: the map is derived from the height the paint step already made, by a
+sobel pass, so it is a slider on the strength of an edge that already exists. `extract materials`
+produces something that did not exist, so it is a preset.
+
+three consequences, and each of them is a test:
+
+* **a control has to name a parameter that exists.** `catalogue.Tool.control` has to resolve to a
+  slider on that preset, and `coverage()` says which bullet is misfiled if it does not. this is what
+  stops a sidebar growing a slider nobody wired.
+* **a word that arrives at a model is a choice, not a mode.** `crease`, `stitch`, `emboss` and
+  `deboss` are four values of `surface-detail.detail`, and each value is a prompt fragment, because
+  the node they land on is a diffusion pass. see the correction in `docs/research.md`.
+* **a bullet that asks to explore is a sweep.** `explore material variations` is
+  `apply-material.finish` with six values, which the compiler turns into one unwrap and six paints.
+  if it were six presets, the unwrap would happen six times and somebody would call that a feature.
+
+the reverse case is worth stating too: a preset the brief never names has to be declared in
+`catalogue.PRIMITIVES` with a reason, exactly like `presets.PROCEDURAL` for models. `text-to-image`
+is not in the brief because the brief assumes it, and saying so is cheaper than discovering the gap
+later.
+
 ## what a preset is not allowed to do
 
 the three refusals are the product's constitution.

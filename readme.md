@@ -74,13 +74,27 @@ every preset below is task-named, because the unit a person thinks in is the tas
 | --- | --- | --- | --- | --- | --- | --- |
 | `text-to-image` | sdxl-turbo | amber | green | explore | 2 | 3 |
 | `sketch-to-mesh` | triposr | green | red | explore | 3 | 3 |
-| `frosted-glass` | none: shading maths | red | red | refine | 2 | 3 |
-| `animate-composition` | none: a camera and a render | red | blue | output | 3 | 3 |
+| `frosted-glass` | none: shading maths on a material | red | red | refine | 2 | 3 |
+| `animate-composition` | none: a camera move and a render | red | blue | output | 3 | 3 |
 | `style-transfer` | ip-adapter | green | green | explore | 2 | 2 |
-| `relight` | ic-light | green | green | explore | 2 | 2 |
-| `studio-light` | ic-light | green | green | refine | 2 | 2 |
-| `surface-detail` | flux-depth-lora | red | red | refine | 3 | 2 |
 | `code-container` | none: your own code | green | green | refine | 1 | 0 |
+| `relight` | ic-light | green | green | explore | 2 | 2 |
+| `studio-light` | ic-light | green | green | refine | 2 | 5 |
+| `surface-detail` | flux-depth-lora | red | red | refine | 3 | 2 |
+| `extract-material` | material-estimator, sam-segment | green | green | explore | 2 | 2 |
+| `apply-material` | pbr-painter | red | red | refine | 2 | 2 |
+| `texture-maps` | pbr-gen | red | green | output | 3 | 6 |
+| `environment` | ic-light | red | red | refine | 2 | 4 |
+| `layers-to-3d` | depth-anything, layer-lift | green | red | explore | 2 | 2 |
+| `sketch-to-render` | controlnet-scribble, sdxl-turbo | green | green | refine | 2 | 3 |
+| `3d-text` | none: extrusion and bevelling is geometry maths | amber | red | explore | 2 | 3 |
+| `replace-object` | flux-fill, sam-segment | green | green | refine | 2 | 3 |
+| `place-graphic` | pbr-painter | red | red | refine | 2 | 3 |
+| `clear-interior` | flux-fill, sam-segment | green | green | refine | 2 | 3 |
+| `cut-out` | birefnet | green | green | output | 1 | 2 |
+| `swap-background` | birefnet, ic-light | green | green | refine | 2 | 2 |
+| `extract-pose` | dwpose | green | green | explore | 1 | 1 |
+| `inpaint` | flux-fill | green | green | refine | 1 | 2 |
 
 three things about that table are load bearing.
 
@@ -98,9 +112,30 @@ that is the only place the two scopes differ. everything else about a board pres
 
 **the catalogue is named after surfaces and runs models.** this was wrong here for a round, and the correction is the interesting part: crease, stitch, emboss and deboss are **diffusion passes**, not a carved edge. `surface-detail` is therefore a model painting a depth map from a sentence (`flux-depth-lora`) and then a geometry node applying it, and the choice arrives at the model as a prompt fragment rather than as a mode name.
 
-that is the whole trick both products sell: *crease* is a word a designer already has, and behind it sits a model nobody had to choose between. the words are the interface, the models are the product. `presets.PROCEDURAL` is the written list of the three presets that genuinely need no model (shading maths, a camera move, your own code), so an absence of models is always a claim somebody made rather than something discovered later, and `bin/flowby presets` prints the model next to the name.
+that is the whole trick both products sell: *crease* is a word a designer already has, and behind it sits a model nobody had to choose between. the words are the interface, the models are the product. `presets.PROCEDURAL` is the written list of the four presets that genuinely need no model (shading maths, a camera move, your own code, and extruding a font), so an absence of models is always a claim somebody made rather than something discovered later, and `bin/flowby presets` prints the model next to the name.
 
 **one preset cannot fill its own inputs, and says so.** `style-transfer` needs a second asset, the look it copies. it spawns with an empty slot, refuses to compile while the slot is empty, and the refusal names the slot. filling it is `scene.link`, which is one drag in the node view.
+
+## the brief, and what it became
+
+the owner's tool list is in the tree as data, not as prose: `catalogue.py`. it is four levels deep and flowby is three, and the difference is the product decision worth stating.
+
+**29 bullets became 16 presets and 16 controls.** a *group* is a sidebar section, a *tool* is a preset, and a *control* inside a tool is a slider on that preset rather than a preset of its own. so `roughness intensity`, `metalness intensity`, `opacity control` and `emission maps` are four bullets and four sliders on one node of `texture-maps`, and `crease`, `stitch`, `emboss` and `deboss` are four bullets and four values of one choice on `surface-detail`. a menu of twenty-nine things that each cost a model call would be vectary with a worse sidebar.
+
+`bin/flowby catalogue` prints the whole mapping, and it exits non-zero if a bullet resolves to nothing:
+
+```
+29 bullets -> 16 presets and 16 controls
+presets the brief never names, and why: 7
+every bullet resolves
+```
+
+those seven are declared in `catalogue.PRIMITIVES` with a reason each, because the brief assumes them without naming them: somewhere to put words, a red wire to dress, a material with no model, the motion its framing section stops short of, the escape hatch for your own code, one cheap relight, and style transfer before it reaches across a board. an absence is a claim somebody made, which is the same rule `presets.PROCEDURAL` applies to models.
+
+two of the collapses are worth pulling out because they are where a catalogue usually lies:
+
+* **explore material variations** is a **sweep**, so six finishes cost one unwrap and six paints. strip the subject and it would cost six of everything, which is what a menu does. the plan for a chair in six finishes is nine steps and seven artifacts, and the suite asserts the unwrap appears once.
+* **geometric pattern mapping** is a control on `place-graphic`, not a preset, because a pattern is what a graphic does when it meets a surface rather than a separate job. `place-graphic` also carries a **slot** for the graphic, which makes it a two-asset preset like style transfer.
 
 ## the recipe, which is the chain read back
 

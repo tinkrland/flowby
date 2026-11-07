@@ -14,6 +14,7 @@ the kernel and alignment halves run as subprocesses because they are not python:
 import contextlib
 import io
 import json
+import re
 import os
 import pathlib
 import subprocess
@@ -25,7 +26,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from flowby import compile as compiler  # noqa: E402
-from flowby import dtypes, modes, presets, routes  # noqa: E402
+from flowby import catalogue, dtypes, modes, presets, routes  # noqa: E402
 from flowby import hub as hubmod  # noqa: E402
 from flowby import job as jobs  # noqa: E402
 from flowby.graph import Graph, GraphRefused, Node, Port  # noqa: E402
@@ -243,10 +244,19 @@ class PresetGraphs(unittest.TestCase):
         self.assertEqual(preset.steps["film"].outputs["out"].dtype, "video")
 
     def test_every_preset_declares_the_gpu_it_would_need(self):
+        """generating presets need a gpu, and a preset without one has to be procedural.
+
+        the carve-out used to be 'input is text', which stopped being true the moment 3d text
+        arrived: extruding a font is arithmetic on a laptop. so the rule is the same one the models
+        get, because the two are the same claim.
+        """
         for preset in presets.PRESETS.values():
-            if preset.input_dtype == "text" or preset.sliders.get("strength"):
-                self.assertTrue(any(s.requires.get("gpu") for s in preset.steps.values()),
-                                f"{preset.name} generates and should say it needs a gpu")
+            needs_gpu = any(step.requires.get("gpu") for step in preset.steps.values())
+            if needs_gpu:
+                continue
+            self.assertIn(preset.name, presets.PROCEDURAL,
+                          f"{preset.name} declares no gpu step, so it has to say why in "
+                          f"PROCEDURAL")
 
 
 class Board(unittest.TestCase):
@@ -360,8 +370,11 @@ class Board(unittest.TestCase):
         self.assertNotIn("frosted-glass", offered)
         self.assertNotIn("text-to-image", offered)
         caption = scene.elements["text-2"]
+        # every preset that reads a text wire, which is now two doors rather than one
+        text_doors = [name for name, p in presets.PRESETS.items() if "text" in p.applies_to]
         self.assertEqual([p["preset"] for p in scene.sidebar(caption.id)["presets"]],
-                         ["text-to-image"])
+                         text_doors)
+        self.assertIn("3d-text", text_doors)
         scene.apply(owl.id, "sketch-to-mesh")
         after = [p["preset"] for p in scene.sidebar(owl.id)["presets"]]
         self.assertIn("frosted-glass", after)
@@ -460,6 +473,93 @@ class Board(unittest.TestCase):
         for node in view["nodes"]:
             self.assertIn("x", node["pos"])
             self.assertIn("y", node["pos"])
+
+
+class Catalogue(unittest.TestCase):
+    """the owner's tool list, and whether the registry answers to all of it.
+
+    the list is data, so a bullet that resolves to nothing is a test failure rather than a
+    paragraph somebody means to get to.
+    """
+
+    def test_every_bullet_resolves_or_the_suite_says_which_does_not(self):
+        cover = catalogue.coverage()
+        self.assertEqual(cover["gaps"], [])
+        self.assertEqual(cover["misfiled"], [])
+        self.assertEqual(cover["unclaimed"], [],
+                         "a preset the brief never names has to be declared a primitive")
+        self.assertEqual(cover["stale_primitives"], [],
+                         "a primitive the brief now names is an excuse that outlived its reason")
+        self.assertTrue(cover["ok"])
+
+    def test_the_brief_has_twenty_nine_bullets_and_they_are_all_still_here(self):
+        # this number is the brief. it changes when the owner says a bullet was added, not when a
+        # refactor makes the tree tidier.
+        self.assertEqual(catalogue.coverage()["tools"], 29)
+
+    def test_the_brief_collapses_further_than_it_reads(self):
+        """29 bullets are not 29 presets, and the ratio is the product decision."""
+        cover = catalogue.coverage()
+        self.assertEqual(cover["presets_named"], 16)
+        self.assertEqual(cover["controls"], 16,
+                         "controls are sliders on a preset, not presets of their own")
+        self.assertEqual(cover["tools"], cover["presets_named"] + cover["controls"] - 3,
+                         "seven bullets share a preset; recount before changing this")
+        texture = presets.get("texture-maps")
+        for control in ("roughness", "metalness", "opacity", "emission", "normal_strength"):
+            self.assertIn(control, texture.sliders,
+                          "the texture map bullets are sliders on one node")
+
+    def test_exploring_variations_is_a_sweep_and_sweeps_share_the_work(self):
+        material = presets.get("apply-material")
+        self.assertIsNotNone(material.sweep, "'explore material variations' is a sweep")
+        self.assertEqual(len(material.sweep.values), 6)
+        scene = Scene()
+        model = scene.add("model", "a chair", asset=ASSET)
+        instance = scene.apply(model.id, "apply-material")
+        sheet = scene.add("image", "the material", asset=ASSET)
+        scene.link(instance.id, "the material", sheet.id)
+        steps = compiler.plan(scene)["steps"]
+        self.assertEqual(len([s for s in steps if s["op"] == "mesh.uv"]), 1,
+                         "the unwrap happens once, not once per finish")
+        self.assertEqual(len([s for s in steps if s["op"] == "material.apply"]), 6)
+        self.assertEqual(len(compiler.plan(scene)["artifacts"]), 7,
+                         "six finishes plus the material sheet you supplied")
+
+    def test_a_graphic_is_a_second_asset_not_a_setting(self):
+        preset = presets.get("place-graphic")
+        self.assertEqual([slot.name for slot in preset.slots], ["the graphic"])
+        self.assertIn("pattern", preset.sliders,
+                      "geometric pattern mapping is a control on the graphic, not a preset")
+
+    def test_every_preset_compiles_once_its_slots_are_filled(self):
+        """the sweep plus a slot was a shape this tree had not had before, so it gets a test."""
+        kinds = {"text": "text", "image": "image", "mesh": "model", "video": "video"}
+        for name, preset in presets.PRESETS.items():
+            with self.subTest(preset=name):
+                scene = Scene()
+                kind = kinds[preset.input_dtype]
+                target = scene.add(kind, "target",
+                                   asset=None if kind == "text" else ASSET,
+                                   text="words" if kind == "text" else None)
+                instance = scene.apply(target.id, name)
+                for slot in preset.slots:
+                    filler = scene.add(kinds[slot.dtype], slot.name,
+                                       asset=None if slot.dtype == "text" else ASSET,
+                                       text="filler" if slot.dtype == "text" else None)
+                    scene.link(instance.id, slot.name, filler.id)
+                plan = compiler.plan(scene)
+                self.assertTrue(plan["steps"], f"{name} compiled to nothing")
+                self.assertTrue(plan["artifacts"], f"{name} produced no artifacts")
+
+    def test_the_cli_says_what_the_brief_became(self):
+        result = subprocess.run(
+            [str(ROOT / "bin" / "flowby"), "catalogue"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("29 bullets -> 16 presets and 16 controls", result.stdout)
+        self.assertIn("every bullet resolves", result.stdout)
 
 
 class Doors(unittest.TestCase):
@@ -652,12 +752,13 @@ class Models(unittest.TestCase):
 
     def test_the_two_products_were_right_about_this(self):
         """both reference catalogues name surfaces and run models. the census is that sentence
-        as a thing a test can hold: six of nine presets are model calls, and the three that are
-        not are shading maths, a camera move, and your own code."""
+        as a thing a test can hold: most presets are model calls, and the ones that are not are
+        exactly the ones PROCEDURAL excuses, in writing."""
         census = presets.model_census()
         called = [name for name, models in census.items() if models]
-        self.assertEqual(len(called), 6)
-        self.assertEqual(sorted(set(census) - set(called)), sorted(presets.PROCEDURAL))
+        self.assertEqual(len(called), 19)
+        self.assertEqual(sorted(set(census) - set(called)), sorted(presets.PROCEDURAL),
+                         "a preset with no model and no excuse is a gap, not a decision")
 
 
 class Sweeps(unittest.TestCase):
@@ -1080,6 +1181,21 @@ class Kernel(unittest.TestCase):
         self.assertIn("4 steps", result.stdout)
         self.assertIn("mesh.triposr", result.stdout)
         self.assertIn("would install: opencv-python-headless", result.stdout)
+
+    def test_every_op_a_preset_declares_is_an_op_the_worker_knows(self):
+        """a preset whose op the worker refuses is a preset that can never run.
+
+        this was true of nineteen ops after the catalogue landed: the graphs wired, the compiler
+        planned, and the far end said "not an op this worker knows" for sixteen of them. the worker
+        keeps its table explicit rather than deriving it from the registry, because a typo'd op
+        should be refused rather than accepted, so what is needed is this test.
+        """
+        source = (ROOT / "kernel" / "worker.py").read_text()
+        known = set(re.findall(r'^    "([a-z]+\.[a-z.]+)":', source, re.M))
+        for name, preset in presets.PRESETS.items():
+            for step in preset.steps.values():
+                self.assertIn(step.op, known,
+                              f"{name} declares {step.op}, which the worker cannot run")
 
     def test_the_worker_writes_a_manifest_a_job_will_accept(self):
         directory = pathlib.Path(tempfile.mkdtemp())

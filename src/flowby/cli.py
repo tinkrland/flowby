@@ -7,6 +7,7 @@ memory by `demo`, because persistence belongs to the app layer and this file is 
     flowby presets                    the menu, with each preset's honest state
     flowby legend                     the four wires
     flowby modes                      freeform, fixed and style, and the crossings
+    flowby catalogue                  the owner's tool list, resolved into presets and controls
     flowby demo                       build a board, show both views
     flowby sidebar <element>          what clicking that element opens
     flowby plan --preset sketch-to-mesh --set detail=90000
@@ -22,6 +23,7 @@ import os
 import sys
 
 from . import compile as compiler
+from . import catalogue
 from . import modes
 from . import dtypes, presets, routes
 from .scene import Scene, SceneRefused, Transform
@@ -44,6 +46,28 @@ def _say(text: str, as_json: bool, payload=None) -> None:
         print(json.dumps(payload if payload is not None else text, indent=2, default=str))
     else:
         print(text)
+
+
+def cmd_catalogue(args) -> int:
+    if args.json:
+        print(json.dumps({"tree": catalogue.tree(), "coverage": catalogue.coverage()}, indent=2))
+        return 0
+    for line in catalogue.tree():
+        print(line)
+    cover = catalogue.coverage()
+    print()
+    print(f"{cover['tools']} bullets -> {cover['presets_named']} presets and "
+          f"{cover['controls']} controls")
+    print(f"presets the brief never names, and why: {len(catalogue.PRIMITIVES)}")
+    for name, reason in catalogue.PRIMITIVES.items():
+        print(f"  {name:20} {reason}")
+    if not cover["ok"]:
+        for key in ("gaps", "misfiled", "unclaimed", "stale_primitives"):
+            for line in cover[key]:
+                print(f"  {key}: {line}")
+        return 1
+    print("every bullet resolves")
+    return 0
 
 
 def cmd_modes(args) -> int:
@@ -276,6 +300,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     subs.add_parser("presets", help="the preset menu").set_defaults(func=cmd_presets)
     subs.add_parser("legend", help="the four wires").set_defaults(func=cmd_legend)
+    cat = subs.add_parser("catalogue", help="the brief's tool list, and what each one became")
+    cat.add_argument("--json", action="store_true")
+    cat.set_defaults(func=cmd_catalogue)
     mods = subs.add_parser("modes", help="the three doors into the graph")
     mods.add_argument("--json", action="store_true")
     mods.set_defaults(func=cmd_modes)

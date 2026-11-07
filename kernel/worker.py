@@ -42,6 +42,27 @@ UNIMPLEMENTED = {
     "mesh.read": "trimesh, to bake a depth guide",
     "mesh.relief": "trimesh, to displace from a map",
     "detail.paint": "a depth-conditioned diffusion pass",
+    # the catalogue's ops. the texture and surface ones are mostly arithmetic, and saying
+    # "arithmetic, not weights" is the useful distinction rather than a euphemism for both.
+    "text.compose": "trivial, but still a step somebody has to write",
+    "control.lines": "opencv edge extraction, no weights",
+    "mesh.uv": "trimesh unwrap, arithmetic",
+    "texture.pbr": "a pbr texture pass",
+    "texture.normal": "a sobel pass over the height map, no weights",
+    "material.segment": "sam-style segmentation weights",
+    "material.estimate": "a material estimator",
+    "material.apply": "a pbr painter",
+    "material.decal": "a pbr painter, decal mode",
+    "image.segment": "sam-style segmentation weights",
+    "image.inpaint": "flux-fill weights",
+    "image.matte": "birefnet weights",
+    "image.composite": "a matte plus a composite, no weights of its own",
+    "mesh.relight": "ic-light weights, on geometry",
+    "mesh.lift": "a depth-conditioned layered mesh",
+    "mesh.extrude": "fonttools plus trimesh, arithmetic",
+    "layers.split": "depth-anything weights",
+    "scene.environment": "a scene builder, no weights",
+    "pose.estimate": "dwpose weights",
 }
 
 ELEMENT = "element."

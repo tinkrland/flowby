@@ -760,7 +760,8 @@ register(Preset(
             label="grade onto this frame",
             inputs={"plate": Port("image"), "palette": image("palette")},
             outputs={"out": Port("image")},
-            params={"temperature": 0.5, "contrast": 0.5},
+            params={"temperature": 0.5, "contrast": 0.5, "palette": "neutral",
+                    "intensity": 1.0},
             requires={"models": ["ic-light"], "gpu": True, "minutes": 0.9},
         ),
     },
@@ -775,6 +776,30 @@ register(Preset(
             name="contrast", label="contrast", low=0.0, high=1.0, default=0.5,
             means="flat and soft through to a hard ratio.",
             targets=(Target("grade", "contrast"),),
+        ),
+        "style": Slider(
+            name="style", label="adapt the lighting style", low=0, high=1, default="studio",
+            kind="choice",
+            choices=(("studio", "studio"), ("three point", "three point"),
+                     ("softbox", "softbox"), ("rim", "rim light"), ("window", "window light")),
+            means="which standing setup the reference is read as. the palette is still read from "
+                  "your frame; this decides how to read it.",
+            targets=(Target("study", "look"),),
+        ),
+        "palette": Slider(
+            name="palette", label="colour palette", low=0, high=1, default="neutral",
+            kind="choice",
+            choices=(("neutral", "neutral"), ("warm amber", "warm amber"),
+                     ("cool teal", "cool teal"), ("high key", "high key"),
+                     ("low key", "low key")),
+            means="test a grade across every frame at once, which is the whole reason this preset "
+                  "runs once and reaches many.",
+            targets=(Target("grade", "palette"),),
+        ),
+        "intensity": Slider(
+            name="intensity", label="lighting intensity", low=0.2, high=2.0, default=1.0,
+            means="how much of the new light replaces the old, from a hint to a room change.",
+            targets=(Target("grade", "intensity"),),
         ),
     },
 ))
@@ -840,10 +865,740 @@ register(Preset(
 ))
 
 
+register(Preset(
+    name="extract-material",
+    label="extract materials",
+    blurb=("take the material off something you already like and keep it as a set: albedo, "
+           "roughness, metalness, per surface."),
+    applies_to=("image", "sketch"),
+    input_dtype="image",
+    entry="read",
+    entry_port="image",
+    sink="estimate",
+    stage="explore",
+    steps={
+        "read": Step(
+            op="material.segment",
+            label="find the surfaces",
+            inputs={"image": Port("image")},
+            outputs={"out": image("segmentation")},
+            params={"min_area": 0.02},
+            requires={"pip": ["torch"], "models": ["sam-segment"], "gpu": True, "minutes": 0.7},
+        ),
+        "estimate": Step(
+            op="material.estimate",
+            label="read albedo, roughness and metalness",
+            inputs={"surfaces": image("segmentation")},
+            outputs={"out": image("material")},
+            params={"layers": 5},
+            requires={"models": ["material-estimator"], "gpu": True, "minutes": 1.1},
+        ),
+    },
+    edges=(("read", "out", "estimate", "surfaces"),),
+    sliders={
+        "layers": Slider(
+            name="layers", label="how many materials", low=1, high=8, default=5,
+            means="one clean material or a set of eight; each one is another surface it has to find.",
+            targets=(Target("estimate", "layers"),),
+        ),
+        "barely": Slider(
+            name="barely", label="ignore small surfaces", low=0.005, high=0.10, default=0.02,
+            means="anything under this fraction of the frame is skipped, which keeps buckles and "
+                  "buttons out of the set.",
+            targets=(Target("read", "min_area"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="apply-material",
+    label="apply materials",
+    blurb=("dress a mesh in a material set and see six finishes at once. one unwrap, six paints, "
+           "which is what 'explore material variations' actually costs."),
+    applies_to=("mesh",),
+    input_dtype="mesh",
+    entry="unwrap",
+    entry_port="geometry",
+    sink="paint",
+    stage="refine",
+    steps={
+        "unwrap": Step(
+            op="mesh.uv",
+            label="lay the surface flat",
+            inputs={"geometry": Port("mesh")},
+            outputs={"out": image("layout")},
+            params={"margin": 0.01},
+            requires={"pip": ["trimesh"], "minutes": 0.3},
+        ),
+        "paint": Step(
+            op="material.apply",
+            label="paint it on",
+            inputs={"layout": image("layout"), "material": image("material")},
+            outputs={"out": Port("mesh")},
+            params={"finish": "matte", "tiling": 1.0},
+            requires={"pip": ["trimesh"], "models": ["pbr-painter"], "gpu": True,
+                      "minutes": 1.4,
+                      "needs": {"image": "a material set, or any image to wear"}},
+        ),
+    },
+    edges=(("unwrap", "out", "paint", "layout"),),
+    slots=(
+        Slot(name="the material", node="paint", port="material", dtype="image",
+             means="the set from extract material, or any image you want the surface to wear"),
+    ),
+    sweep=Sweep(slider="finish", label="six finishes", values=(
+        "matte", "satin", "polished", "brushed", "hammered", "raw")),
+    sliders={
+        "finish": Slider(
+            name="finish", label="finish", low=0, high=1, default="matte", kind="choice",
+            choices=(("matte", "matte"), ("satin", "satin"), ("polished", "polished"),
+                     ("brushed", "brushed"), ("hammered", "hammered"), ("raw", "raw")),
+            means="what the surface does to light. the sweep runs all six off one unwrap.",
+            targets=(Target("paint", "finish"),),
+        ),
+        "tiling": Slider(
+            name="tiling", label="tiling", low=0.25, high=4.0, default=1.0,
+            means="how many times the material repeats across the surface.",
+            targets=(Target("paint", "tiling"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="texture-maps",
+    label="pbr texture maps",
+    blurb=("one pass produces the whole map set: albedo, normals, roughness, metalness, opacity, "
+           "emission. five of the six are sliders on the same node, not five more nodes."),
+    applies_to=("mesh",),
+    input_dtype="mesh",
+    entry="layout",
+    entry_port="geometry",
+    sink="normals",
+    stage="output",
+    steps={
+        "layout": Step(
+            op="mesh.uv",
+            label="lay the surface flat",
+            inputs={"geometry": Port("mesh")},
+            outputs={"out": image("layout")},
+            params={"margin": 0.01},
+            requires={"pip": ["trimesh"], "minutes": 0.3},
+        ),
+        "paint": Step(
+            op="texture.pbr",
+            label="paint the map set",
+            inputs={"layout": image("layout")},
+            outputs={"out": image("maps")},
+            params={"roughness": 0.5, "metalness": 0.0, "opacity": 1.0, "emission": 0.0,
+                    "resolution": 2048},
+            requires={"pip": ["torch"], "models": ["pbr-gen"], "gpu": True, "minutes": 1.8},
+        ),
+        "normals": Step(
+            op="texture.normal",
+            label="derive normals and the rest",
+            inputs={"maps": image("maps")},
+            outputs={"out": image("maps")},
+            params={"strength": 0.5, "from": "height"},
+            requires={"pip": ["numpy", "pillow"], "minutes": 0.2},
+        ),
+    },
+    edges=(("layout", "out", "paint", "layout"), ("paint", "out", "normals", "maps")),
+    sliders={
+        "roughness": Slider(
+            name="roughness", label="roughness", low=0.0, high=1.0, default=0.5,
+            means="mirror smooth at zero, chalk at one.",
+            targets=(Target("paint", "roughness"),),
+        ),
+        "metalness": Slider(
+            name="metalness", label="metalness", low=0.0, high=1.0, default=0.0,
+            means="dielectric through to metal, which changes what the lighting is allowed "
+                  "to reflect.",
+            targets=(Target("paint", "metalness"),),
+        ),
+        "opacity": Slider(
+            name="opacity", label="opacity", low=0.0, high=1.0, default=1.0,
+            means="below one the material writes an alpha channel and the frame gets something "
+                  "behind it.",
+            targets=(Target("paint", "opacity"),),
+        ),
+        "emission": Slider(
+            name="emission", label="emission", low=0.0, high=1.0, default=0.0,
+            means="how much the surface is a light source rather than a lit thing.",
+            targets=(Target("paint", "emission"),),
+        ),
+        "normal_strength": Slider(
+            name="normal_strength", label="normal depth", low=0.0, high=2.0, default=0.5,
+            means="how hard the normals turn at an edge. past one they start to lie.",
+            targets=(Target("normals", "strength"),),
+        ),
+        "resolution": Slider(
+            name="resolution", label="map size", low=1024, high=4096, default=2048,
+            means="texels per side. the only control here that costs memory rather than time.",
+            targets=(Target("paint", "resolution"),),
+            unit=" px",
+        ),
+    },
+))
+
+
+register(Preset(
+    name="environment",
+    label="put it outside",
+    blurb=("a scene that lights the thing rather than sitting behind it: skate park, courtyard, "
+           "overcast street. reflections come from the place, not from a gradient."),
+    applies_to=("mesh", "image"),
+    input_dtype="mesh",
+    entry="place",
+    entry_port="subject",
+    sink="light",
+    stage="refine",
+    steps={
+        "place": Step(
+            op="scene.environment",
+            label="build the place",
+            inputs={"subject": Port("mesh")},
+            outputs={"out": image("environment"), "subject": Port("mesh")},
+            params={"variant": "skate park", "sun": 0.6, "floor": True},
+            requires={"pip": ["trimesh"], "minutes": 0.3},
+        ),
+        "light": Step(
+            op="mesh.relight",
+            label="light it from there",
+            inputs={"geometry": Port("mesh"), "environment": image("environment")},
+            outputs={"out": Port("mesh")},
+            params={"bounce": 0.5, "reflections": 0.7},
+            requires={"models": ["ic-light"], "gpu": True, "minutes": 1.2},
+        ),
+    },
+    edges=(("place", "out", "light", "environment"),
+           ("place", "subject", "light", "geometry")),
+    sliders={
+        "where": Slider(
+            name="where", label="where", low=0, high=1, default="skate park", kind="choice",
+            choices=(("skate park", "skate park"), ("courtyard", "courtyard"),
+                     ("overcast street", "overcast street"), ("rooftop", "rooftop"),
+                     ("studio void", "studio void")),
+            means="the place decides the reflections, so this is the biggest single lever here.",
+            targets=(Target("place", "variant"),),
+        ),
+        "sun": Slider(
+            name="sun", label="sun", low=0.0, high=1.0, default=0.6,
+            means="overhead flat light through to a low raking sun.",
+            targets=(Target("place", "sun"),),
+        ),
+        "bounce": Slider(
+            name="bounce", label="bounce", low=0.0, high=1.0, default=0.5,
+            means="how much light comes back off the ground into the underside.",
+            targets=(Target("light", "bounce"),),
+        ),
+        "reflections": Slider(
+            name="reflections", label="reflections", low=0.0, high=1.0, default=0.7,
+            means="the part that makes it read as outdoors at all.",
+            targets=(Target("light", "reflections"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="layers-to-3d",
+    label="generate 3d from 2d layers",
+    blurb=("a flat artwork is split into layers by depth and lifted into a relief, so each plane "
+           "sits behind the one in front of it."),
+    applies_to=("image", "sketch"),
+    input_dtype="image",
+    entry="split",
+    entry_port="stack",
+    sink="lift",
+    stage="explore",
+    flips_plane="3d",
+    steps={
+        "split": Step(
+            op="layers.split",
+            label="split by depth",
+            inputs={"stack": Port("image")},
+            outputs={"out": image("layers")},
+            params={"max_layers": 6, "feather": 2},
+            requires={"pip": ["torch"], "models": ["depth-anything"], "gpu": True,
+                      "minutes": 0.8},
+        ),
+        "lift": Step(
+            op="mesh.lift",
+            label="lift the layers apart",
+            inputs={"layers": image("layers")},
+            outputs={"out": Port("mesh")},
+            params={"gap": 0.12, "bevel": 0.01},
+            requires={"pip": ["trimesh"], "models": ["layer-lift"], "gpu": True,
+                      "minutes": 1.5},
+        ),
+    },
+    edges=(("split", "out", "lift", "layers"),),
+    sliders={
+        "max_layers": Slider(
+            name="max_layers", label="layers", low=2, high=12, default=6,
+            means="how many planes it separates. more layers is more relief and more cleanup.",
+            targets=(Target("split", "max_layers"),),
+        ),
+        "gap": Slider(
+            name="gap", label="depth", low=0.0, high=0.5, default=0.12,
+            means="the space between layers, which is the difference between a cutout and a stack.",
+            targets=(Target("lift", "gap"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="sketch-to-render",
+    label="sketch to photorealistic render",
+    blurb="the line stays yours; what changes is what the line is made of.",
+    applies_to=("sketch", "image"),
+    input_dtype="image",
+    entry="read",
+    entry_port="image",
+    sink="render",
+    stage="refine",
+    steps={
+        "read": Step(
+            op="control.lines",
+            label="hold the line",
+            inputs={"image": Port("image")},
+            outputs={"out": image("lines")},
+            params={"threshold": 0.5},
+            requires={"pip": ["opencv-python-headless"], "minutes": 0.2},
+        ),
+        "render": Step(
+            op="image.gen",
+            label="render it as a thing",
+            inputs={"lines": image("lines"), "look": image("style", optional=True)},
+            outputs={"out": Port("image")},
+            params={"steps": 24, "guidance": 6.0, "material": "ceramic"},
+            requires={"pip": ["diffusers", "torch"],
+                      "models": ["sdxl-turbo", "controlnet-scribble"], "gpu": True,
+                      "minutes": 1.9},
+        ),
+    },
+    edges=(("read", "out", "render", "lines"),),
+    sliders={
+        "fidelity": Slider(
+            name="fidelity", label="fidelity", low=1.0, high=12.0, default=6.0,
+            means="obey the drawing, or drift into something plausible.",
+            targets=(Target("render", "guidance"),),
+        ),
+        "keep": Slider(
+            name="keep", label="how much line", low=0.1, high=0.9, default=0.5,
+            means="where the line-extraction threshold sits, so faint pencil is kept or lost.",
+            targets=(Target("read", "threshold"),),
+        ),
+        "material": Slider(
+            name="material", label="made of", low=0, high=1, default="ceramic",
+            kind="choice",
+            choices=(("ceramic", "ceramic"), ("clay", "clay"), ("resin", "resin"),
+                     ("paper", "paper")),
+            means="the substance the drawing gets rendered in.",
+            targets=(Target("render", "material"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="3d-text",
+    label="3d text",
+    blurb=("words become geometry on the board, bevelled and lit by whatever material you put on "
+           "them next."),
+    applies_to=("text",),
+    input_dtype="text",
+    entry="write",
+    entry_port="draft",
+    sink="extrude",
+    stage="explore",
+    flips_plane="3d",
+    steps={
+        "write": Step(
+            op="text.compose",
+            label="the words",
+            inputs={"draft": Port("text", optional=True)},
+            outputs={"out": Port("text")},
+            params={"prefix": "", "case": "as typed"},
+            requires={"minutes": 0.2},
+        ),
+        "extrude": Step(
+            op="mesh.extrude",
+            label="extrude and bevel",
+            inputs={"words": Port("text")},
+            outputs={"out": Port("mesh")},
+            params={"depth": 0.25, "bevel": 0.02, "font": "Inter", "tracking": 0.0},
+            requires={"pip": ["trimesh", "fonttools"], "minutes": 0.4},
+        ),
+    },
+    edges=(("write", "out", "extrude", "words"),),
+    sliders={
+        "depth": Slider(
+            name="depth", label="depth", low=0.02, high=1.0, default=0.25,
+            means="how far the letters come off the wall.",
+            targets=(Target("extrude", "depth"),),
+        ),
+        "bevel": Slider(
+            name="bevel", label="bevel", low=0.0, high=0.1, default=0.02,
+            means="the edge that catches the light. at zero the letters look cut from paper.",
+            targets=(Target("extrude", "bevel"),),
+        ),
+        "font": Slider(
+            name="font", label="font", low=0, high=1, default="Inter", kind="choice",
+            choices=(("Inter", "Inter"), ("serif", "serif"), ("mono", "mono"),
+                     ("rounded", "rounded")),
+            means="the only control here that changes the shape rather than the light.",
+            targets=(Target("extrude", "font"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="replace-object",
+    label="replace selected objects",
+    blurb=("paint over one thing and have the shot believe it: the mask is found, the hole is "
+           "filled, the shadow on the floor is redrawn."),
+    applies_to=("image",),
+    input_dtype="image",
+    entry="mask",
+    entry_port="image",
+    sink="fill",
+    stage="refine",
+    steps={
+        "mask": Step(
+            op="image.segment",
+            label="find the object",
+            inputs={"image": Port("image")},
+            outputs={"mask": image("mask"), "subject": Port("image")},
+            params={"hint": "the main object", "expand": 0.02},
+            requires={"models": ["sam-segment"], "gpu": True, "minutes": 0.6},
+        ),
+        "fill": Step(
+            op="image.inpaint",
+            label="put something else there",
+            inputs={"image": Port("image"), "mask": image("mask")},
+            outputs={"out": Port("image")},
+            params={"prompt": "a ceramic vase", "strength": 0.9},
+            requires={"models": ["flux-fill"], "gpu": True, "minutes": 1.3},
+        ),
+    },
+    edges=(("mask", "subject", "fill", "image"), ("mask", "mask", "fill", "mask")),
+    sliders={
+        "select": Slider(
+            name="select", label="select", low=0, high=1, default="the main object",
+            kind="choice",
+            choices=(("the main object", "the main object"), ("furniture", "furniture"),
+                     ("a person", "a person"), ("the background", "the background")),
+            means="what gets masked. the mask is a wire, so you can also see it and drag its edge "
+                  "in the pipeline view.",
+            targets=(Target("mask", "hint"),),
+        ),
+        "becomes": Slider(
+            name="becomes", label="becomes", low=0, high=1, default="a ceramic vase",
+            kind="choice",
+            choices=(("a ceramic vase", "a ceramic vase"), ("a wooden bowl", "a wooden bowl"),
+                     ("a plant", "a tall plant"), ("nothing", "an empty floor")),
+            means="what fills the hole, in words, because that is how the model takes it.",
+            targets=(Target("fill", "prompt"),),
+        ),
+        "strength": Slider(
+            name="strength", label="strength", low=0.3, high=1.0, default=0.9,
+            means="how far the fill is allowed to move away from the pixels underneath it.",
+            targets=(Target("fill", "strength"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="place-graphic",
+    label="graphic placement",
+    blurb=("a graphic is laid onto a surface and follows it, so a repeat reads as print rather "
+           "than as a sticker."),
+    applies_to=("mesh",),
+    input_dtype="mesh",
+    entry="unwrap",
+    entry_port="geometry",
+    sink="decal",
+    stage="refine",
+    steps={
+        "unwrap": Step(
+            op="mesh.uv",
+            label="lay the surface flat",
+            inputs={"geometry": Port("mesh")},
+            outputs={"out": image("layout")},
+            params={"margin": 0.01, "pattern": "as drawn"},
+            requires={"pip": ["trimesh"], "minutes": 0.3},
+        ),
+        "decal": Step(
+            op="material.decal",
+            label="set the graphic into it",
+            inputs={"layout": image("layout"), "graphic": image("graphic")},
+            outputs={"out": Port("mesh")},
+            params={"mode": "print", "bleed": 0.0},
+            requires={"pip": ["trimesh"], "models": ["pbr-painter"], "gpu": True,
+                      "minutes": 1.0,
+                      "needs": {"image": "the graphic itself"}},
+        ),
+    },
+    edges=(("unwrap", "out", "decal", "layout"),),
+    slots=(
+        Slot(name="the graphic", node="decal", port="graphic", dtype="image",
+             means="the artwork to place, as an image on the board"),
+    ),
+    sliders={
+        "pattern": Slider(
+            name="pattern", label="pattern", low=0, high=1, default="as drawn", kind="choice",
+            choices=(("as drawn", "as drawn"), ("repeat", "repeat"),
+                     ("kaleidoscope", "kaleidoscope"), ("grid", "grid")),
+            means="how the graphic tiles across the surface, which is the geometric half of this "
+                  "preset.",
+            targets=(Target("unwrap", "pattern"),),
+        ),
+        "mode": Slider(
+            name="mode", label="printed as", low=0, high=1, default="print", kind="choice",
+            choices=(("print", "print"), ("emboss", "emboss"), ("embroidery", "embroidery")),
+            means="whether the graphic is ink, raised, or stitched.",
+            targets=(Target("decal", "mode"),),
+        ),
+        "bleed": Slider(
+            name="bleed", label="bleed", low=0.0, high=0.2, default=0.0,
+            means="how far past the seam the graphic is allowed to run, so it does not stop dead "
+                  "at an edge.",
+            targets=(Target("decal", "bleed"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="clear-interior",
+    label="clear an interior",
+    blurb="empty the room but keep the room: walls, floor and light stay, the furniture goes.",
+    applies_to=("image",),
+    input_dtype="image",
+    entry="mask",
+    entry_port="image",
+    sink="fill",
+    stage="refine",
+    steps={
+        "mask": Step(
+            op="image.segment",
+            label="find what is in it",
+            inputs={"image": Port("image")},
+            outputs={"mask": image("mask"), "subject": Port("image")},
+            params={"target": "furniture", "keep": "walls, floor, windows", "expand": 0.04},
+            requires={"models": ["sam-segment"], "gpu": True, "minutes": 0.8},
+        ),
+        "fill": Step(
+            op="image.inpaint",
+            label="empty it",
+            inputs={"image": Port("image"), "mask": image("mask")},
+            outputs={"out": Port("image")},
+            params={"prompt": "an empty room, same light", "strength": 0.8},
+            requires={"models": ["flux-fill"], "gpu": True, "minutes": 1.6},
+        ),
+    },
+    edges=(("mask", "subject", "fill", "image"), ("mask", "mask", "fill", "mask")),
+    sliders={
+        "target": Slider(
+            name="target", label="clear", low=0, high=1, default="furniture", kind="choice",
+            choices=(("furniture", "furniture"), ("everything", "everything loose"),
+                     ("clutter", "clutter only")),
+            means="what counts as the thing to remove.",
+            targets=(Target("mask", "target"),),
+        ),
+        "keep": Slider(
+            name="keep", label="keep", low=0, high=1, default="walls, floor, windows",
+            kind="choice",
+            choices=(("walls, floor, windows", "walls, floor, windows"),
+                     ("the light", "the light"), ("the view", "the view out the window")),
+            means="what the fill is not allowed to invent over.",
+            targets=(Target("mask", "keep"),),
+        ),
+        "strength": Slider(
+            name="strength", label="strength", low=0.3, high=1.0, default=0.8,
+            means="how completely the new surface replaces the old one.",
+            targets=(Target("fill", "strength"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="cut-out",
+    label="remove the background",
+    blurb="a subject with an honest edge, including hair, which is where matting usually gives up.",
+    applies_to=("image",),
+    input_dtype="image",
+    entry="matte",
+    entry_port="image",
+    sink="matte",
+    stage="output",
+    steps={
+        "matte": Step(
+            op="image.matte",
+            label="separate subject from ground",
+            inputs={"image": Port("image")},
+            outputs={"out": image("cutout")},
+            params={"feather": 2, "threshold": 0.5},
+            requires={"models": ["birefnet"], "gpu": True, "minutes": 0.7},
+        ),
+    },
+    edges=(),
+    sliders={
+        "feather": Slider(
+            name="feather", label="edge", low=0.0, high=8.0, default=2.0,
+            means="soft pixels at the boundary. too little and a cutout reads as a sticker.",
+            targets=(Target("matte", "feather"),),
+        ),
+        "threshold": Slider(
+            name="threshold", label="confidence", low=0.2, high=0.8, default=0.5,
+            means="how sure the matte has to be before a pixel counts as subject.",
+            targets=(Target("matte", "threshold"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="swap-background",
+    label="replace the background",
+    blurb="keep the subject, lose the room, and put a chosen frame behind it.",
+    applies_to=("image",),
+    input_dtype="image",
+    entry="matte",
+    entry_port="image",
+    sink="compose",
+    stage="refine",
+    steps={
+        "matte": Step(
+            op="image.matte",
+            label="cut the subject out",
+            inputs={"image": Port("image")},
+            outputs={"cutout": image("cutout")},
+            params={"feather": 2},
+            requires={"models": ["birefnet"], "gpu": True, "minutes": 0.7},
+        ),
+        "compose": Step(
+            op="image.composite",
+            label="put the new ground behind",
+            inputs={"subject": image("cutout"), "background": image("background")},
+            outputs={"out": Port("image")},
+            params={"match_light": 0.6, "contact_shadow": 0.4},
+            requires={"models": ["ic-light"], "gpu": True, "minutes": 1.0,
+                      "needs": {"image": "a background frame"}},
+        ),
+    },
+    edges=(("matte", "cutout", "compose", "subject"),),
+    slots=(
+        Slot(name="the background", node="compose", port="background", dtype="image",
+             means="the frame to put behind it, which is any image already on the board"),
+    ),
+    sliders={
+        "match_light": Slider(
+            name="match_light", label="match the light", low=0.0, high=1.0, default=0.6,
+            means="warm the subject towards the new ground, or leave it as shot.",
+            targets=(Target("compose", "match_light"),),
+        ),
+        "contact_shadow": Slider(
+            name="contact_shadow", label="contact shadow", low=0.0, high=1.0, default=0.4,
+            means="the shadow that stops the subject floating a centimetre above the floor.",
+            targets=(Target("compose", "contact_shadow"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="extract-pose",
+    label="extract a pose",
+    blurb=("the pose comes out as its own frame, which means it can drive a different subject "
+           "without re-describing anything."),
+    applies_to=("image",),
+    input_dtype="image",
+    entry="pose",
+    entry_port="image",
+    sink="pose",
+    stage="explore",
+    steps={
+        "pose": Step(
+            op="pose.estimate",
+            label="read the pose",
+            inputs={"image": Port("image")},
+            outputs={"out": image("pose")},
+            params={"detail": "full body", "smooth": 1},
+            requires={"models": ["dwpose"], "gpu": True, "minutes": 0.5},
+        ),
+    },
+    edges=(),
+    sliders={
+        "detail": Slider(
+            name="detail", label="detail", low=0, high=1, default="full body", kind="choice",
+            choices=(("full body", "full body"), ("hands", "hands"), ("face", "face")),
+            means="how much of the body it maps. hands and face are slower and pickier.",
+            targets=(Target("pose", "detail"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="inpaint",
+    label="inpaint adjustments",
+    blurb=("change one region and leave the rest of the frame untouched. the mask is the second "
+           "asset, which is the honest shape of every inpaint job."),
+    applies_to=("image",),
+    input_dtype="image",
+    entry="fill",
+    entry_port="image",
+    sink="fill",
+    stage="refine",
+    steps={
+        "fill": Step(
+            op="image.inpaint",
+            label="fill the region",
+            inputs={"image": Port("image"), "mask": image("mask")},
+            outputs={"out": Port("image")},
+            params={"prompt": "a seam that belongs there", "strength": 0.85},
+            requires={"models": ["flux-fill"], "gpu": True, "minutes": 1.2,
+                      "needs": {"image": "a mask"}},
+        ),
+    },
+    edges=(),
+    slots=(
+        Slot(name="the area", node="fill", port="mask", dtype="image",
+             means="a mask, or any image whose bright areas mark the region"),
+    ),
+    sliders={
+        "fills": Slider(
+            name="fills", label="fills with", low=0, high=1, default="a seam that belongs there",
+            kind="choice",
+            choices=(("a seam that belongs there", "a seam that belongs there"),
+                     ("the same material", "the same material"),
+                     ("a repair, no trace", "a repair with no trace")),
+            means="words, because the model takes words.",
+            targets=(Target("fill", "prompt"),),
+        ),
+        "strength": Slider(
+            name="strength", label="strength", low=0.3, high=1.0, default=0.85,
+            means="how free the fill is inside the masked region only.",
+            targets=(Target("fill", "strength"),),
+        ),
+    },
+))
+
+
 PROCEDURAL = {
     "frosted-glass": "shading maths on a material, which is arithmetic rather than inference",
     "animate-composition": "a camera move and a render, which is exactly what they say they are",
     "code-container": "your own code, which is the one thing a model should not be guessing at",
+    "3d-text": ("extrusion and bevelling is geometry maths, and the material is a second preset "
+                "rather than a guess"),
 }
 
 

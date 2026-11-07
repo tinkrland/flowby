@@ -62,7 +62,22 @@ the brief says the backend handles "mapping frontend geometric states into struc
 
 the reason is the far end: `kernel.sh` is a shell script, and a shell script cannot resolve a wire. flattening once, in python, where the graph is typed and testable, means the container's job is to install, run, and post, and that every type error is found on the wrong side of the network.
 
-## 9. what is not decided here
+## 9. a tool list is a mapping, not a menu
+
+the owner's brief is four levels deep: group, section, tool, control. flowby is three: group, tool
+(preset), control (slider). the mapping is data in `catalogue.py` so it can be tested, and the
+numbers are the decision: **29 bullets, 16 presets, 16 controls.**
+
+two bullets are worth calling out because they are where a catalogue usually cheats. `explore
+material variations` is a sweep, not six presets, so the work before the swept node runs once. and
+`geometric pattern mapping` is a control on `place-graphic` rather than a preset, because a pattern
+is what a graphic does when it meets a surface.
+
+the rule for a new bullet: **it is a preset if it changes what the graph produces, and a control if
+it changes a number or a word the same graph already takes.** a preset the brief never names has to
+be declared a primitive with a reason, which is the same discipline `PROCEDURAL` applies to models.
+
+## 10. what is not decided here
 
 the licence. whether boards are multiplayer. whether a preset can be authored by a user inside the product, which both products in `docs/research.md` are moving toward and which is a different product surface than shipping six of them.
 
