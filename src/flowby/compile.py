@@ -56,6 +56,69 @@ def needed(scene) -> tuple[set[str], dict[str, dict]]:
     return required, display
 
 
+def sweeps(scene, required: set[str]) -> tuple[dict, dict]:
+    """instances that fan out, and which nodes are inside the fan.
+
+    the split is the interesting part: everything before the branch point runs once, and only the
+    tail behind it is copied per value. six lighting versions of one photograph is one read of the
+    plate and six relights, and a compiler that copies the read six times is a compiler that
+    spends five times the gpu it needed to.
+    """
+    found: dict[str, tuple] = {}
+    tail_of: dict[str, str] = {}
+    for instance in scene.instances.values():
+        preset = presets.get(instance.preset)
+        if preset.sweep is None or instance.detached:
+            continue
+        if not (set(instance.nodes) & required):
+            continue
+        found[instance.id] = (preset, preset.sweep.values)
+        for role in preset.tail():
+            tail_of[f"{instance.id}/{role}"] = instance.id
+    return found, tail_of
+
+
+def _step(scene, node_id: str, node, variant: int | None, owner: str | None,
+          found: dict, tail_of: dict) -> dict:
+    inputs = {}
+    for port, spec in node.inputs.items():
+        wires = scene.graph.edges_into(node_id, port)
+        if not wires:
+            if spec.optional:
+                continue
+            where = f" ({node.instance.split('/')[-1]})" if node.instance else ""
+            raise CompileRefused(
+                f"{node.label or node_id}{where} needs a {dtypes.wire(spec.dtype).colour} "
+                f"wire on {port}, and has none. an unwired input is a question, not a default."
+            )
+        edge = wires[0]
+        suffix = ""
+        if variant is not None and tail_of.get(edge.src[0]) == owner:
+            suffix = f"@{variant}"  # a wire inside the fan stays inside its own copy
+        inputs[port] = f"{edge.src[0]}{suffix}:{edge.src[1]}"
+    if node.op.startswith("element.") and node.params.get("asset") is None \
+            and node.params.get("text") is None:
+        raise CompileRefused(f"{node.label} has no bytes behind it, so there is nothing to send")
+    params = dict(node.params)
+    if variant is not None:
+        preset, values = found[owner]
+        if node_id == f"{owner}/{preset.branch_point()}":
+            for role, param, machine in preset.sliders[preset.sweep.slider].project(values[variant - 1]):
+                if f"{owner}/{role}" == node_id:
+                    params[param] = machine
+        params["variant"] = variant
+    return {
+        "id": f"{node_id}@{variant}" if variant is not None else node_id,
+        "op": node.op,
+        "label": node.label or node_id,
+        "minutes": node.minutes(),
+        "gpu": bool((node.requires or {}).get("gpu")),
+        "inputs": inputs,
+        "outputs": {p: s.dtype for p, s in node.outputs.items()},
+        "params": params,
+    }
+
+
 def plan(scene, route: str | None = None, present: set[str] | None = None,
          now: float | None = None) -> dict:
     required, display = needed(scene)
@@ -64,39 +127,19 @@ def plan(scene, route: str | None = None, present: set[str] | None = None,
     except GraphRefused as refusal:
         raise CompileRefused(str(refusal)) from None
 
+    found, tail_of = sweeps(scene, required)
     steps = []
     for node_id in order:
         node = scene.graph.nodes[node_id]
-        inputs = {}
-        for port, spec in node.inputs.items():
-            wires = scene.graph.edges_into(node_id, port)
-            if not wires:
-                if spec.optional:
-                    continue
-                owner = f" ({node.instance.split('/')[-1]})" if node.instance else ""
-                raise CompileRefused(
-                    f"{node.label or node_id}{owner} needs a {dtypes.wire(spec.dtype).colour} "
-                    f"wire on {port}, and has none. an unwired input is a question, not a default."
-                )
-            edge = wires[0]
-            inputs[port] = f"{edge.src[0]}:{edge.src[1]}"
-        if node.op.startswith("element.") and node.params.get("asset") is None \
-                and node.params.get("text") is None:
-            raise CompileRefused(f"{node.label} has no bytes behind it, so there is nothing to send")
-        steps.append({
-            "id": node_id,
-            "op": node.op,
-            "label": node.label or node_id,
-            "minutes": node.minutes(),
-            "gpu": bool((node.requires or {}).get("gpu")),
-            "inputs": inputs,
-            "outputs": {p: s.dtype for p, s in node.outputs.items()},
-            "params": dict(node.params),
-        })
+        owner = tail_of.get(node_id)
+        if owner is None:
+            steps.append(_step(scene, node_id, node, None, None, found, tail_of))
+            continue
+        for variant in range(1, len(found[owner][1]) + 1):
+            steps.append(_step(scene, node_id, node, variant, owner, found, tail_of))
 
     pip: list[str] = []
     models: list[str] = []
-    gpu = False
     for node_id in order:
         requires = scene.graph.nodes[node_id].requires or {}
         for name in requires.get("pip", []) or []:
@@ -105,13 +148,22 @@ def plan(scene, route: str | None = None, present: set[str] | None = None,
         for name in requires.get("models", []) or []:
             if name not in models:
                 models.append(name)
-        gpu = gpu or bool(requires.get("gpu"))
+    gpu = any(step["gpu"] for step in steps)
 
     artifacts = []
     for element_id, shown in display.items():
         suffix = ARTIFACT_SUFFIX[shown["dtype"]]
-        artifacts.append({"name": f"{element_id}.{suffix}", "dtype": shown["dtype"],
-                          "element": element_id})
+        owner = tail_of.get(shown["node"])
+        if owner is None:
+            artifacts.append({"name": f"{element_id}.{suffix}", "dtype": shown["dtype"],
+                              "element": element_id, "variant": None})
+            continue
+        count = len(found[owner][1])
+        shown["variants"] = [f"{shown['node']}@{i}:{shown['port']}" for i in range(1, count + 1)]
+        shown["chosen"] = min(scene.elements[element_id].chosen, count - 1)
+        for i in range(1, count + 1):
+            artifacts.append({"name": f"{element_id}#{i}.{suffix}", "dtype": shown["dtype"],
+                              "element": element_id, "variant": i})
 
     board = [
         {"id": e.id, "label": e.label, "plane": e.plane,
@@ -120,9 +172,8 @@ def plan(scene, route: str | None = None, present: set[str] | None = None,
         for e in scene.elements.values()
     ]
 
-    minutes = sum(scene.graph.nodes[n].minutes() for n in order)
-    gpu_minutes = sum(scene.graph.nodes[n].minutes() for n in order
-                      if (scene.graph.nodes[n].requires or {}).get("gpu"))
+    minutes = sum(step["minutes"] for step in steps)
+    gpu_minutes = sum(step["minutes"] for step in steps if step["gpu"])
     cost = {
         "total_minutes": round(minutes, 1),
         "gpu_minutes": round(gpu_minutes, 1),

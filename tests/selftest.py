@@ -35,6 +35,14 @@ ASSET = "sha256:" + "a" * 64
 MODEL_ASSET = "sha256:" + "b" * 64
 
 
+def worker_run(plan: dict, directory: pathlib.Path) -> dict:
+    """the worker, in process, with simulated bytes. used wherever artifacts are asserted."""
+    sys.path.insert(0, str(ROOT / "kernel"))
+    import worker
+
+    return worker.run(plan, directory, simulate=True)
+
+
 def board() -> Scene:
     """a board with one sketch, one caption, and nothing applied."""
     scene = Scene(id="t", title="test board")
@@ -448,6 +456,98 @@ class Board(unittest.TestCase):
             self.assertIn("y", node["pos"])
 
 
+class Sweeps(unittest.TestCase):
+    """one input, several results. the shape both reference products lead with."""
+
+    def test_relight_declares_six_lighting_versions(self):
+        preset = presets.get("relight")
+        self.assertIsNotNone(preset.sweep)
+        self.assertEqual(len(preset.sweep.values), 6)
+        self.assertEqual(preset.branch_point(), "relight")
+        self.assertEqual(preset.tail(), {"relight"})
+        for value in preset.sweep.values:
+            self.assertGreaterEqual(value, preset.sliders["warmth"].low)
+            self.assertLessEqual(value, preset.sliders["warmth"].high)
+
+    def test_a_sweep_that_repeats_itself_is_refused(self):
+        with self.assertRaises(presets.PresetRefused):
+            presets.Sweep(slider="warmth", label="repeats", values=(2, 2))
+        with self.assertRaises(presets.PresetRefused):
+            presets.Sweep(slider="warmth", label="nothing", values=())
+
+    def test_a_sweep_of_a_slider_the_preset_lacks_is_refused(self):
+        from dataclasses import replace
+
+        bad = presets.Sweep(slider="glow", label="nothing", values=(1, 2))
+        with self.assertRaises(presets.PresetRefused):
+            replace(presets.get("relight"), sweep=bad)
+
+    def test_the_head_of_the_fan_runs_once_and_only_the_tail_is_copied(self):
+        document = compiler.preset_plan("relight")
+        meters = [s for s in document["steps"] if s["op"] == "light.meter"]
+        relights = [s for s in document["steps"] if s["op"] == "light.relight"]
+        self.assertEqual(len(meters), 1, "reading the plate six times is five wasted reads")
+        self.assertEqual(len(relights), 6)
+        for step in relights:
+            self.assertTrue(step["inputs"]["plate"].startswith(meters[0]["id"] + ":"),
+                            "every branch reads the one shared plate")
+
+    def test_each_copy_carries_its_own_value_and_its_own_wire(self):
+        document = compiler.preset_plan("relight")
+        relights = [s for s in document["steps"] if s["op"] == "light.relight"]
+        kelvins = [step["params"]["kelvin"] for step in relights]
+        self.assertEqual(kelvins, [4500.0, 5200.0, 5600.0, 6500.0, 7500.0, 8500.0])
+        self.assertEqual([step["params"]["variant"] for step in relights], [1, 2, 3, 4, 5, 6])
+        self.assertEqual(len({step["id"] for step in relights}), 6)
+
+    def test_a_fan_produces_one_artifact_per_version(self):
+        document = compiler.preset_plan("relight")
+        names = [a["name"] for a in document["artifacts"]]
+        self.assertEqual(names, [f"sketch-1#{i}.png" for i in range(1, 7)])
+        shown = document["display"]["sketch-1"]
+        self.assertEqual(len(shown["variants"]), 6)
+        self.assertTrue(shown["variants"][0].endswith("@1:out"))
+        self.assertEqual(shown["chosen"], 0)
+
+    def test_the_cost_counts_the_copied_part_six_times_and_the_shared_part_once(self):
+        document = compiler.preset_plan("relight")
+        gpu = routes.ROUTES["colab-browserbase"]
+        self.assertAlmostEqual(document["cost"]["gpu_minutes"], 6 * 1.1, places=1)
+        self.assertAlmostEqual(document["cost"]["cpu_minutes"], 0.3, places=1)
+        self.assertLess(document["cost"]["total_minutes"], gpu.ceiling_minutes)
+
+    def test_the_sidebar_says_how_many_versions_before_you_press_it(self):
+        scene = Scene()
+        photo = scene.add("image", "studio plate", asset=ASSET)
+        scene.apply(photo.id, "relight")
+        panel = [p for p in scene.sidebar(photo.id)["presets"] if p["preset"] == "relight"][0]
+        self.assertEqual(panel["estimate"]["gpu_minutes"], 6.6)
+        self.assertEqual(scene.variant_count(photo.id), 6)
+
+    def test_choosing_a_version_is_a_pointer_and_not_a_rerun(self):
+        scene = Scene()
+        photo = scene.add("image", "studio plate", asset=ASSET)
+        scene.apply(photo.id, "relight")
+        self.assertEqual(scene.show_variant(photo.id, 3), 3)
+        self.assertEqual(scene.board()[0]["chosen"], 3)
+        self.assertEqual(len(compiler.plan(scene)["artifacts"]), 6)
+        with self.assertRaises(SceneRefused):
+            scene.show_variant(photo.id, 9)
+
+    def test_the_whole_fan_survives_the_worker_and_the_job_store(self):
+        plan = compiler.preset_plan("relight")
+        directory = pathlib.Path(tempfile.mkdtemp())
+        manifest = worker_run(plan, directory)
+        self.assertEqual([a["variant"] for a in manifest["artifacts"]], [1, 2, 3, 4, 5, 6])
+        store = jobs.Store()
+        job, _ = store.submit(plan)
+        store.dispatch(job.id)
+        store.start(job.id)
+        store.complete(job.id, manifest)
+        self.assertEqual(len(job.artifacts), 6)
+        self.assertEqual(job.artifacts[5]["name"], "sketch-1#6.png")
+
+
 class Plans(unittest.TestCase):
     def test_a_plan_is_flat_and_every_wire_names_an_earlier_step(self):
         scene = board()
@@ -749,7 +849,13 @@ class Hubs(unittest.TestCase):
                                            "sha256": "0" * 64, "bytes": 1}])
         message = sub.drain()[0]
         self.assertEqual(message["kind"], "artifacts")
-        self.assertEqual(message["by_element"]["sketch-1"]["name"], "sketch-1.glb")
+        self.assertEqual(message["by_element"]["sketch-1"][0]["name"], "sketch-1.glb")
+        hub.artifacts("board-1", "fb_2", [
+            {"name": "sketch-1#1.png", "element": "sketch-1", "variant": 1},
+            {"name": "sketch-1#2.png", "element": "sketch-1", "variant": 2},
+        ])
+        grouped = sub.drain()[0]
+        self.assertEqual(len(grouped["by_element"]["sketch-1"]), 2, "a fan stays one frame")
 
 
 class Kernel(unittest.TestCase):

@@ -62,6 +62,7 @@ every preset below is task-named, because the unit a person thinks in is the tas
 | `frosted-glass` | red | red | refine | 2 | 3 |
 | `style-transfer` | green | green | explore | 2 | 2 |
 | `animate-composition` | red | blue | output | 3 | 3 |
+| `relight` | green | green | explore | 2 | 2 |
 | `code-container` | green | green | refine | 1 | 0 |
 
 three things about that table are load bearing.
@@ -69,6 +70,10 @@ three things about that table are load bearing.
 **presets chain, and the chain starts where the frame is now.** applying `sketch-to-mesh` to a sketch points the frame at the mesh node. applying `frosted-glass` next reads the mesh, not the sketch, so the material lands on the geometry and the original drawing is still a node behind it. nothing is destructive and nothing has to be re-imported.
 
 **the sidebar only offers what can be applied now.** on a raw sketch, `frosted-glass` is not in the list, because it reads a red wire and the sketch is green. after the mesh exists, it is. this is the difference between a menu of everything and a next step.
+
+**one click can come back with several results.** `relight` is a **sweep**: one photograph, six lighting setups, side by side, because that is what both reference products actually ship and it is the most useful thing on either page. the compiler treats it as a branch rather than a loop. the work before the swept node runs **once** and only the tail is copied, so six relights of one plate is one read and six renders, not six of everything. the cost says so: 0.3 minutes of shared work and 6.6 of gpu, and the plan carries eight steps, not twelve.
+
+`scene.show_variant` picks one to keep looking at, and picking is a pointer rather than a re-run. every variant was produced, the artifact names carry the number (`sketch-1#1.png` through `#6`), and the frame that receives them gets one group instead of one image.
 
 **one preset cannot fill its own inputs, and says so.** `style-transfer` needs a second asset, the look it copies. it spawns with an empty slot, refuses to compile while the slot is empty, and the refusal names the slot. filling it is `scene.link`, which is one drag in the node view.
 
@@ -95,6 +100,7 @@ those numbers are fields on the route, not prose, which is the point: `routes.fi
 | --- | --- | --- |
 | wires, graph, presets, chaining, slots | verified | `tests/selftest.py` |
 | the compiled plan, its cost, its refusals | verified | `tests/selftest.py` |
+| the sweep: shared head, copied tail, one artifact per variant | verified | `tests/selftest.py` |
 | the route table and its refusals | verified | `tests/selftest.py` |
 | job lifecycle, artifact checking, watchdog | verified | `tests/selftest.py` |
 | `kernel.sh` parsing and dry run | verified | run as a subprocess |

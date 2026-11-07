@@ -40,6 +40,92 @@ what that implies, and what this tree took:
 4. **a code container belongs in the chain.** `code-container` is a preset with one node and no sliders, so source code is an asset with wires rather than a separate feature.
 5. **a canvas should survive a lot of nodes.** not verified here, but it is the reason `hub.Hub` closes a slow subscriber instead of dropping messages for it: a second view that silently falls behind is worse than a view that reconnects.
 
+
+## seen on the page, not read in the copy
+
+both sites were opened in a real browser and sampled frame by frame through screenshots, because the
+copy describes a workflow and the hero videos demonstrate one. what follows is only what the pixels
+showed. the hero on vectary is an autoplaying demo inside a window frame; it was sampled at intervals
+rather than decoded, so this is a set of observations and not a shot list.
+
+### vectary canvas
+
+**the demo window is a mac app frame with the product's own controls.** the traffic lights sit top
+left, the project path runs across the top bar (`C26 / Work - Alberic / stool`), and the interesting
+part is the right panel, which has two tabs: **Properties** and **Presets**. properties holds
+material, a colour swatch and a `roughness` slider sitting at 100%. so the preset layer and the
+parameter layer are two tabs of one sidebar, not two modes.
+
+**a preset announces itself as a card over the canvas.** bottom left of the demo, a small white card
+with a thumbnail reads *"Sketch to photo: transform a sketch into a polished, fully rendered visual
+based on reference image."* one name, one sentence, no parameters. the slider arrives after you
+accept it.
+
+**the node graph is shown in marketing, which means it is not a developer secret.** the research
+section draws a dotted grid with an `Input shape` node holding a brown mouse, wired to two cards
+side by side both titled `Recolor`, surrounded by a grid of six reference textures on one side and a
+grid of six lattice-sphere results on the other. two parallel nodes, not one: **variants are visible
+in the graph itself**, as siblings.
+
+**the explore section is a wall of results from one model.** a 4 by 3 grid, twelve variations of the
+same white mouse with a copper wheel, each a different structure (voronoi, lattice, wireframe,
+hexagonal cutout, woven). a badge over the top left reads *"4 Design variations — view unique design
+variations for the mouse model, all rendered within minutes,"* and a label top right says `Shape
+exploration`. so one click on one model produced a **grid**, and the grid is the deliverable, not an
+intermediate step.
+
+### fuser
+
+**the front door is a prompt, not a canvas.** the hero is a single floating pill reading *"Make a
+picture to pixel weaver for your mom"* with one `Generate` button, sitting over a carousel of
+finished project windows. the node graph is the second sentence, never the first impression.
+
+**the recipe library is faceted like a catalogue.** 188 recipes, filtered by output type (3d, audio,
+image, text, video) and by around twenty-eight categories, each card carrying a name, an author
+handle, a category and one sentence of intent.
+
+**and the recipe sentences are fan-out sentences.** this is the finding. from the library itself:
+
+* *relight an image*: "upload one image to **explore six lighting versions**, from studio daylight
+  and soft white to dramatic spotlight and golden hour."
+* *change interior room style*: "upload one room image to explore japandi, art deco maximalist, dark
+  academia, classical, and mid century modern variations."
+* *merch mockups from a logo*: "turn **one logo into** business card, letterhead, tote bag, socks,
+  hat, and shirt mockups."
+* *product e-commerce photography*: "transform a product image into website-ready **front, side, and
+  back** product photos."
+
+so the repeated unit across both products is not the preset. it is **one input, a named set of
+parallel results, side by side.** fuser names the set in the recipe; vectary renders it as a labelled
+grid. both then ask you to pick one and keep going.
+
+## what that changed in this tree
+
+one thing, and it was the biggest gap: flowby produced exactly one artifact per element, so every
+preset was a single shot and the board could only ever show one answer.
+
+`Preset.sweep` is that finding as a compiler rule. a preset may declare one slider, a discrete list
+of values and a label ("six lighting versions"), and the compiler splits its subgraph at the swept
+node: **the head runs once, the tail is copied per value.** `relight` is the shipped example, and it
+mirrors fuser's recipe almost line for line, because the recipe is the thing that made the shape
+obvious.
+
+three details came from looking rather than from either site's copy:
+
+* **the fan is addresses, not files.** an element comes back with `sketch-1#1.png` through `#6`,
+  and the socket groups them by element so the frame receives one update with six results rather
+  than six updates that each replace the last.
+* **picking is a pointer.** `show_variant` moves the frame's display to variant n. nothing re-runs,
+  which is what makes comparing six results cheaper than generating one.
+* **the shared head is the cost story.** the plan for six relights is eight steps and 6.9 minutes,
+  not twelve steps and 7.2, and that difference is the argument for a compiler over a loop.
+
+what was deliberately not taken: vectary's two-tab sidebar (properties and presets) is right and is
+already the shape of `scene.sidebar`, which returns controls with real ranges rather than a mode
+switch, so nothing changed there. fuser's prompt-first hero was not taken either, because flowby's
+brief starts from a board rather than a sentence, and a prompt bar over a canvas is the one thing a
+preset card already does better on a spatial layer.
+
 ## the one thing both are doing and this tree is not
 
 both are moving toward **authoring presets inside the product**: vectary says custom presets are "coming soon" for teams, and fuser's recipes are already user-recorded. flowby ships six presets in a python file, which is appropriate for a tree with no accounts and no storage, and is the first thing that would have to change for a real studio to adopt it. that is named in `theidea/decisions.md` under what is not decided rather than left to be discovered.

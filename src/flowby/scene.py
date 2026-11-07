@@ -54,6 +54,7 @@ class Element:
     asset: str | None = None
     display: str | None = None
     text: str | None = None
+    chosen: int = 0
     params: dict = field(default_factory=dict)
     history: list[str] = field(default_factory=list)
 
@@ -218,6 +219,29 @@ class Scene:
             element.history.append(f"{preset.name}: plane {element.plane}")
         return instance
 
+    def variant_count(self, element_id: str) -> int:
+        """how many results the thing the frame is drawing produced. 1 for a plain preset."""
+        element = self._element(element_id)
+        for instance in self.instances.values():
+            if instance.sink == element.display and not instance.detached:
+                preset = presets.get(instance.preset)
+                return len(preset.sweep.values) if preset.sweep else 1
+        return 1
+
+    def show_variant(self, element_id: str, index: int) -> int:
+        """pick one of the fan's results to keep looking at. 0 based, and it is only a pointer:
+        every variant was produced, and a later compile still runs the whole fan."""
+        element = self._element(element_id)
+        count = self.variant_count(element_id)
+        if not 0 <= index < count:
+            raise SceneRefused(
+                f"{element.label} has {count} variant{'s' if count != 1 else ''}; "
+                f"there is no {index}. variants are 0 to {count - 1}."
+            )
+        element.chosen = index
+        element.history.append(f"variant {index + 1} of {count}")
+        return index
+
     def show(self, element_id: str, node_id: str | None = None) -> str:
         """what the frame draws. `None` puts the element's own media back, which is the
         "show the original" toggle, and which is also how a branch stops being compiled."""
@@ -348,6 +372,8 @@ class Scene:
                 "dtype": element.dtype,
                 "rendered": self.rendered_dtype(element.id),
                 "display": element.display,
+                "variants": self.variant_count(element.id),
+                "chosen": element.chosen,
                 "history": list(element.history),
             },
             "presets": applicable,
@@ -409,6 +435,8 @@ class Scene:
                 "plane": e.plane,
                 "dtype": self.rendered_dtype(e.id),
                 "display": e.display,
+                "variants": self.variant_count(e.id),
+                "chosen": min(e.chosen, max(0, self.variant_count(e.id) - 1)),
                 "transform": vars(e.transform),
                 "presets": [i.preset for i in self.instances.values()
                             if i.element == e.id and not i.detached],

@@ -34,6 +34,9 @@ UNIMPLEMENTED = {
     "render.frames": "blender (bpy)",
     "style.read": "an ip-adapter encoder",
     "image.stylize": "diffusers + ip-adapter",
+    "light.meter": "a white balance read",
+    "light.relight": "ic-light weights",
+    "code.python": "the code in the container, which only the container can run",
 }
 
 ELEMENT = "element."
@@ -78,11 +81,15 @@ def run(plan: dict, outdir: pathlib.Path, simulate: bool = False) -> dict:
     artifacts = []
     for declared in plan["artifacts"]:
         shown = plan["display"][declared["element"]]
+        variant = declared.get("variant")
+        fan = shown.get("variants") or ["%s:%s" % (shown["node"], shown["port"])]
+        source = fan[(variant or 1) - 1]
+        where = "%s variant %s" % (declared["element"], variant) if variant else declared["element"]
         body = (
             f"flowby {CONTRACT}\n"
             f"job {plan['job_id']}\n"
-            f"element {declared['element']}\n"
-            f"from {shown['node']}:{shown['port']} ({shown['dtype']})\n"
+            f"element {where}\n"
+            f"from {source} ({declared['dtype']})\n"
             f"simulated {simulate}\n"
         ).encode()
         path = outdir / declared["name"]
@@ -91,6 +98,7 @@ def run(plan: dict, outdir: pathlib.Path, simulate: bool = False) -> dict:
             "name": declared["name"],
             "dtype": declared["dtype"],
             "element": declared["element"],
+            "variant": declared.get("variant"),
             "sha256": hashlib.sha256(body).hexdigest(),
             "bytes": len(body),
         })

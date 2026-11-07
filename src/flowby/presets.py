@@ -109,6 +109,30 @@ class Slider:
 
 
 @dataclass(frozen=True)
+class Sweep:
+    """one parameter, several values, several results side by side.
+
+    this is the shape both reference products sell and neither of them explains, because it reads as
+    a feature and is actually a compiler question: the work before the swept node happens once, and
+    only the branch after it is duplicated per value. six lighting versions is one read and six
+    renders, not six of everything.
+    """
+
+    slider: str
+    label: str
+    values: tuple
+
+    def __post_init__(self):
+        if not self.values:
+            raise PresetRefused(f"{self.label} sweeps nothing")
+        if len(set(self.values)) != len(self.values):
+            raise PresetRefused(f"{self.label} sweeps {self.values} and repeats itself")
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+
+@dataclass(frozen=True)
 class Slot:
     """an input a preset needs and cannot invent.
 
@@ -153,6 +177,7 @@ class Preset:
     edges: tuple[tuple[str, str, str, str], ...]
     sliders: dict[str, Slider]
     slots: tuple[Slot, ...] = ()
+    sweep: Sweep | None = None
     stage: str = "explore"
     flips_plane: str | None = None
     state: str = "designed"
@@ -179,6 +204,14 @@ class Preset:
                     f"which {slot.node} does not take"
                 )
             dtypes.wire(slot.dtype)
+        if self.sweep is not None and self.sweep.slider not in self.sliders:
+            raise PresetRefused(
+                f"{self.name} sweeps {self.sweep.slider!r}, which is not one of its sliders"
+            )
+        if self.sweep is not None:
+            slider = self.sliders[self.sweep.slider]
+            for value in self.sweep.values:
+                slider.check(value)
         for slider in self.sliders.values():
             slider.project(slider.default)
             for target in slider.targets:
@@ -199,12 +232,36 @@ class Preset:
     def minutes(self) -> float:
         return sum(step.requires.get("minutes", 0) for step in self.steps.values())
 
+    def branch_point(self) -> str:
+        """the node the sweep starts at: the first target of the swept slider."""
+        if self.sweep is None:
+            return ""
+        return self.sliders[self.sweep.slider].targets[0].node
+
+    def tail(self) -> set[str]:
+        """every step at or after the branch point, which is the part the sweep duplicates."""
+        start = self.branch_point()
+        if not start:
+            return set()
+        reached = {start}
+        growing = True
+        while growing:
+            growing = False
+            for a, _, b, _ in self.edges:
+                if a in reached and b not in reached:
+                    reached.add(b)
+                    growing = True
+        return reached
+
     def estimate(self, values: dict | None = None) -> dict:
         """what this costs if you press it. both products above show this before the run, not
         after, and it is the single cheapest thing that stops a board from being a slot machine."""
-        gpu = sum(step.requires.get("minutes", 0) for step in self.steps.values()
-                  if step.requires.get("gpu"))
-        total = self.minutes()
+        tail = self.tail()
+        copies = len(self.sweep.values) if self.sweep else 1
+        gpu = sum(step.requires.get("minutes", 0) * (copies if role in tail else 1)
+                  for role, step in self.steps.items() if step.requires.get("gpu"))
+        total = sum(step.requires.get("minutes", 0) * (copies if role in tail else 1)
+                    for role, step in self.steps.items())
         return {"minutes": round(total, 1),
                 "gpu_minutes": round(gpu, 1),
                 "cpu_minutes": round(total - gpu, 1),
@@ -243,6 +300,9 @@ class Preset:
             "estimate": self.estimate(values),
             "slots": [{"name": s.name, "node": s.node, "port": s.port,
                        "dtype": s.dtype, "means": s.means} for s in self.slots],
+            "sweep": ({"slider": self.sweep.slider, "label": self.sweep.label,
+                       "values": list(self.sweep.values),
+                       "variants": len(self.sweep.values)} if self.sweep else None),
         }
 
 
@@ -587,6 +647,53 @@ register(Preset(
 ))
 
 
+register(Preset(
+    name="relight",
+    label="relight the shot",
+    blurb=("one photo, six lighting setups, side by side. pick the one that reads and keep going."),
+    applies_to=("image", "sketch"),
+    input_dtype="image",
+    entry="meter",
+    entry_port="photo",
+    sink="relight",
+    stage="explore",
+    steps={
+        "meter": Step(
+            op="light.meter",
+            label="read the plate",
+            inputs={"photo": Port("image")},
+            outputs={"out": image("palette")},
+            params={"white_balance": "auto"},
+            requires={"pip": ["pillow"], "minutes": 0.3},
+        ),
+        "relight": Step(
+            op="light.relight",
+            label="relight",
+            inputs={"plate": image("palette")},
+            outputs={"out": Port("image")},
+            params={"kelvin": 5600, "exposure": 0.0, "softness": 0.4},
+            requires={"pip": ["torch"], "models": ["ic-light"], "gpu": True, "minutes": 1.1},
+        ),
+    },
+    edges=(("meter", "out", "relight", "plate"),),
+    sweep=Sweep(slider="warmth", label="six lighting versions",
+                values=(4500, 5200, 5600, 6500, 7500, 8500)),
+    sliders={
+        "warmth": Slider(
+            name="warmth", label="warmth", low=2000, high=9000, default=5600,
+            means="the colour of the light, in kelvin. studio daylight sits near the middle.",
+            targets=(Target("relight", "kelvin"),),
+            unit="K",
+        ),
+        "softness": Slider(
+            name="softness", label="softness", low=0.0, high=1.0, default=0.4,
+            means="hard key light through to a big diffused source.",
+            targets=(Target("relight", "softness"),),
+        ),
+    },
+))
+
+
 def legend() -> dict:
     """what the frontend needs to draw a preset menu without knowing any of the above."""
     return {
@@ -595,7 +702,9 @@ def legend() -> dict:
              "applies_to": list(p.applies_to),
              "from": p.input_dtype, "to": p.out_dtype(),
              "state": p.state, "nodes": len(p.steps),
-             "controls": len(p.sliders)}
+             "controls": len(p.sliders), "stage": p.stage,
+             "variants": len(p.sweep.values) if p.sweep else 1,
+             "estimate": p.estimate()["minutes"]}
             for p in PRESETS.values()
         ],
         "wires": dtypes.palette(),

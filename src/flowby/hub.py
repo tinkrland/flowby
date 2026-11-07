@@ -78,11 +78,14 @@ class Hub:
 
     def artifacts(self, workspace: str, job, artifacts: list) -> dict:
         """fresh pixels for the board, addressed by element so the frame updates in place."""
+        grouped: dict[str, list] = {}
+        for artifact in artifacts:
+            grouped.setdefault(artifact["element"], []).append(artifact)
         message = {
             "kind": "artifacts",
             "job": job.id if hasattr(job, "id") else str(job),
             "artifacts": artifacts,
-            "by_element": {a["element"]: a for a in artifacts},
+            "by_element": grouped,
         }
         self.broadcast(workspace, message)
         return message
