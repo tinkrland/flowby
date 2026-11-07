@@ -243,3 +243,60 @@ visible here. so:
   upload and a token as an environment variable. the browser-driving route is only needed if the
   user does not want to paste anything. the script is also usable as a generated notebook the user
   opens and runs, which avoids driving google's ui at all (and the terms risk with it).
+
+### the prose on foreground and background (illustrace `RASTER_ASSESSMENT_CONTRACT.md`)
+
+the owner pointed at the repo's prose specifically "for a bit of reference on weighted foreground,
+background etc." for the style kind. the relevant text is the raster assessment contract, plus two
+lines in `llm/README.md`. what it says, restated for flowby:
+
+* **a style has a region, and the region has an authority order.** the contract scores a finished
+  image over `whole`, `subject` or `background`, and settles who decides where the subject is, in
+  this order: (1) a mask the user or dataset supplies; (2) a mask from a version-pinned segmentation
+  model, with model and confidence logged; (3) a deterministic border-contrast foreground heuristic,
+  labelled as a heuristic; (4) the whole frame, labelled as a fallback. its stated reason: opencv can
+  find contours and saliency, but "high contrast, central placement, and semantic importance are
+  different concepts", so a pixel heuristic must never silently decide what the focus is.
+* **nothing decides silently.** "neither saliency nor a vision model is allowed to silently decide
+  which image contributes which factor." the user assigns a reference to a factor; the machine only
+  measures. for flowby this is the rule for a style node with a mask input: if the mask came from a
+  model or a guess, the node says so, and it falls back to the whole frame with lower confidence
+  when no credible foreground exists.
+* **subject and background are scored separately.** "subject and background scorecards remain
+  separate when a mask exists." so a styled output has two results, not one averaged number. the
+  contract also refuses a single universal style score: factors "cannot be averaged honestly".
+* **a source image is content, never style, unless assigned.** the source is "a content anchor,
+  never a style reference unless the user explicitly assigns it to a factor". that is the same
+  separation vectary and fuser make by having a distinct input slot for what to draw.
+* **weighting is two axes, not one** (from the composer): *strength* is magnitude and *gravity* is
+  who wins a conflict. the top-ranked reference wins a component even at a lower percentage, and
+  lower ranks blend in at a decay of 0.65 per step. in lora terms, strength is the adapter weight
+  and gravity is the priority between adapters that claim the same region.
+* **the way to apply a style to a region is masking, not stacking.** the engine doc and `llm/README`
+  both say to prefer spatial or attention masks over raw stacking, because adapters interfere past
+  2 or 3 at once. so "this style on the foreground, that one on the background" is a masked
+  application of two loras, each at a normal 0.3 to 0.7 weight, instead of two loras fighting over
+  the whole frame.
+
+what this means for the **style** kind in flowby, as a proposal, not a decision:
+
+| a style node takes | notes |
+| --- | --- |
+| the image (content, never style) | the thing being restyled |
+| one or more styles, each with a **strength** | the trained lora and its weight |
+| an optional **mask** with a stated origin | user-drawn, model-made (pinned and logged), or heuristic |
+| a **region** per style | whole, subject or background, so foreground and background can carry different styles |
+| an optional **priority** among styles | decides conflicts where regions overlap |
+
+and it returns the styled image, the mask it used with where it came from, and a scorecard for the
+subject and the background separately. the part this repo has **not** built is the application: the
+contract is an instrument for *scoring* finished images, and the masked multi-lora generation it
+recommends is design only. flowby would be the first to run it.
+
+### the studio token (2026-11-07)
+
+the owner supplied a Base44 personal access token for reading studio. it authenticates only as an
+`Authorization: Bearer` header, and lists exactly three apps on the account (this agent, another
+agent, and an imported public app). studio's app id is not among them, so the token does not reach
+studio's code or data. studio is treated as unread, and its style transfer flow is still the one
+piece of research missing. the token is held as a secret and never written to the repo.
