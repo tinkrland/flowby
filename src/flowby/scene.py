@@ -601,15 +601,27 @@ class Scene:
         ]
 
     def pipeline(self) -> dict:
-        """the node layer, as the inspector reads it: nodes placed, wires coloured by dtype."""
-        positions = {}
+        """the node layer, as the inspector reads it: nodes, wires, and where each node sits.
+
+        **no pixel positions.** this used to invent a grid (`320 + column * 240`) which the
+        renderer would then lay out again with its own engine, so the two disagreed by default and
+        every node dragged by hand was lost on the next render. a layered layout needs two things
+        from the graph and neither of them is geometry: the depth of each node (`rank`, which is
+        what `@dagre` turns into columns) and the element it hangs off (`row`, for grouping). the
+        geometry belongs to the renderer, and now only the renderer has it.
+        """
+        rank: dict[str, int] = {}
+        for node_id in self.graph.order:          # topological, so predecessors are ranked
+            parents = [e.src[0] for e in self.graph.edges if e.dst[0] == node_id]
+            rank[node_id] = 1 + max((rank[p] for p in parents), default=-1)
+
+        row_of: dict[str, int] = {}
         for index, element in enumerate(self.elements.values()):
-            positions[element.id] = {"x": 0.0, "y": index * 160.0}
-            attached = [i for i in self.instances.values() if element.id in i.elements]
-            for row, inst in enumerate(attached):
-                for column, node_id in enumerate(inst.nodes):
-                    positions[node_id] = {"x": 320.0 + column * 240.0,
-                                          "y": index * 160.0 + row * 60.0}
+            for attached in self.instances.values():
+                if element.id in attached.elements:
+                    for node_id in attached.nodes:
+                        row_of.setdefault(node_id, index)
+
         nodes = []
         for node_id in self.graph.order:
             node = self.graph.nodes[node_id]
@@ -619,7 +631,8 @@ class Scene:
                 "label": node.label,
                 "instance": node.instance,
                 "params": dict(node.params),
-                "pos": positions.get(node_id, {"x": 0.0, "y": 0.0}),
+                "rank": rank[node_id],
+                "row": row_of.get(node_id, 0),
                 "inputs": {p: {"dtype": s.dtype, "role": s.role, "many": s.many}
                            for p, s in node.inputs.items()},
                 "outputs": {p: {"dtype": s.dtype, "role": s.role}

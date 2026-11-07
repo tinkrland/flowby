@@ -8,6 +8,7 @@ memory by `demo`, because persistence belongs to the app layer and this file is 
     flowby legend                     the four wires
     flowby modes                      freeform, fixed and style, and the crossings
     flowby catalogue                  the owner's tool list, resolved into presets and controls
+    flowby graph                      the node layer for the browser, with no geometry in it
     flowby demo                       build a board, show both views
     flowby sidebar <element>          what clicking that element opens
     flowby plan --preset sketch-to-mesh --set detail=90000
@@ -144,6 +145,34 @@ def cmd_demo(args) -> int:
     for wire in scene.pipeline()["wires"]:
         print(f"  {wire['colour']:6} {wire['from']['node']}:{wire['from']['port']} -> "
               f"{wire['to']['node']}:{wire['to']['port']}")
+    return 0
+
+
+def cmd_graph(args) -> int:
+    """the node layer as the browser wants it: nodes, wires, the palette, and no geometry.
+
+    this is the seam where the renderer takes over. the graph decides what exists and what is
+    wired to what; @xyflow decides where a node sits and how a wire curves to it.
+    """
+    scene = demo_board()
+    payload = {
+        "scene": scene.id,
+        "title": scene.title,
+        "pipeline": scene.pipeline(),
+        "board": scene.board(),
+        "legend": dtypes.palette(),
+        "roles": dict(dtypes.ROLES),
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    nodes = payload["pipeline"]["nodes"]
+    wires = payload["pipeline"]["wires"]
+    print(f"{payload['title']}: {len(nodes)} nodes, {len(wires)} wires, ranks "
+          f"0..{max(n['rank'] for n in nodes)}")
+    for node in nodes:
+        ins = ", ".join(f"{p}:{dtypes.colour(v['dtype'])}" for p, v in node["inputs"].items())
+        print(f"  r{node['rank']} {node['id']:38} {node['op']:16} in[{ins or '-'}]")
     return 0
 
 
@@ -308,6 +337,7 @@ def build_parser() -> argparse.ArgumentParser:
     mods.set_defaults(func=cmd_modes)
     subs.add_parser("demo", help="build the demo board and show both views").set_defaults(func=cmd_demo)
 
+    subs.add_parser("graph", help="the node layer, for the renderer").set_defaults(func=cmd_graph)
     sidebar = subs.add_parser("sidebar", help="the contextual panel for one element")
     sidebar.add_argument("element")
     sidebar.set_defaults(func=cmd_sidebar)

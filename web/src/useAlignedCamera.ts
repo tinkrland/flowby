@@ -12,13 +12,14 @@
  */
 
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEditor } from "@tldraw/tldraw";
-import { useMemo } from "react";
+import { useEditor } from "tldraw";
+import type { OrthographicCamera } from "three";
+import { useMemo, type RefObject } from "react";
 
 import { cameraFromTldraw, orthoFrustum, visiblePage } from "./align.mjs";
 
 /** the size the container is currently drawn at, in css pixels. */
-export function useViewportSize(ref) {
+export function useViewportSize(ref: RefObject<HTMLElement | null>) {
   const size = useMemo(() => ({ w: 1, h: 1 }), []);
   useFrame(() => {
     const box = ref.current?.getBoundingClientRect();
@@ -37,9 +38,10 @@ export function useViewportSize(ref) {
  * 12cm sketch stays the same size when the board zooms. `y` points down here because page
  * coordinates do, and flipping it per object would be the bug that gets filed twice.
  */
-export function useAlignedCamera(viewportRef) {
+export function useAlignedCamera(viewportRef: RefObject<HTMLElement | null>) {
   const editor = useEditor();
-  const { camera } = useThree();
+  // an orthographic camera, because page coordinates do not converge: the frustum carries zoom
+  const { camera } = useThree() as { camera: OrthographicCamera };
   const viewport = useViewportSize(viewportRef);
 
   useFrame(() => {
@@ -69,7 +71,7 @@ export function useAlignedCamera(viewportRef) {
  * reconnects it replays, which is why toggling "inspect pipeline" costs one round trip and never a
  * rebuild of the scene: the graph did not change, only who is watching it.
  */
-export function useBoardSocket(url, onMessage) {
+export function useBoardSocket(url: string, onMessage: (payload: unknown) => void) {
   const open = () => {
     const socket = new WebSocket(url);
     socket.addEventListener("message", (event) => {

@@ -471,8 +471,10 @@ class Board(unittest.TestCase):
         view = scene.pipeline()
         self.assertEqual(len(view["nodes"]), len(scene.graph.nodes))
         for node in view["nodes"]:
-            self.assertIn("x", node["pos"])
-            self.assertIn("y", node["pos"])
+            # geometry moved to the renderer (@dagre); python emits depth and grouping only
+            self.assertNotIn("pos", node, "python does not lay out nodes any more")
+            self.assertIsInstance(node["rank"], int)
+            self.assertIsInstance(node["row"], int)
 
 
 class Catalogue(unittest.TestCase):

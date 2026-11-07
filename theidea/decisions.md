@@ -77,7 +77,61 @@ the rule for a new bullet: **it is a preset if it changes what the graph produce
 it changes a number or a word the same graph already takes.** a preset the brief never names has to
 be declared a primitive with a reason, which is the same discipline `PROCEDURAL` applies to models.
 
-## 10. what is not decided here
+## 10. node ui is borrowed: @xyflow for the canvas, dagre for the layout
+
+nobody should hand-roll a node editor in 2026. **@xyflow/react** (React Flow 12, MIT) draws the
+node layer and **@dagrejs/dagre** (MIT) decides where nodes sit. both are the boring choice, which
+is the point: the interesting part of this project is the seam between the two views, not bezier
+maths and hit-testing.
+
+what that changed in python: `scene.pipeline()` stopped emitting pixel positions. it used to
+invent a grid (`320 + column * 240`) which the renderer then laid out again with its own engine, so
+the two disagreed by default and a dragged node was lost on the next render. it now emits `rank`
+(depth in the graph, which dagre turns into columns) and `row` (which element a node hangs off), and
+geometry has exactly one owner: the renderer.
+
+the reason this library over the others: LiteGraph.js is a canvas renderer whose look you fight for
+weeks, Rete.js is plugin-shaped and assumes you want its dataflow semantics, Drawflow and jsPlumb
+are lower level than the problem. React Flow is MIT, it is what React developers already know, and
+its viewport is \`screen = page * zoom + translate\`, which is exactly the shape `align.mjs` already
+converts from tldraw's camera. so the node layer and the spatial layer share one camera convention
+without a new coordinate system.
+
+## 11. tldraw: the source is open, the licence is not, and the version matters
+
+the owner pushed back on an earlier draft of this section, and the pushback was fair, so here are
+the terms at the tags rather than the terms at `main`, which is what the npm stub points at:
+
+| version | licence | commercial use |
+| --- | --- | --- |
+| 2.0.0 to 3.x | "tldraw License": "You may use this Software for any non-commercial purpose… You may not use or distribute this Software… in any form for commercial purposes" | needs a paid licence |
+| 4.0.0 and later | the same document rewritten for 4.0: "Not to use the Software in Production Environments", with licence-key enforcement and a watermark | needs a licence key even to deploy |
+
+so the honest phrasing is **source-available, not open source**: nothing is hidden, you can read it,
+fork it, and hack on it for free, and on 2.x there is no key and no watermark in development. what
+you cannot do on any of these versions is ship it commercially without paying. that is a different
+claim from "closed", which is what the first draft of this section implied, and it is the claim
+that matters when the question is whether this repo can become a product.
+
+the dependency in this checkout was also fictional: it named `@tldraw/tldraw@^2.6.1`, a package and
+version that do not exist, so `web` could never install and had never been built, which is why
+there was no tsconfig and eight type errors in a file nobody could compile. that is fixed
+(`tldraw@2.4.6`, a tsconfig, `@types/react-dom`), and dev works.
+
+this checkout pins 2.4.6 and treats the spatial layer as **on loan**. when shipping becomes real,
+the owner picks one:
+
+* buy the tldraw licence and stop thinking about it,
+* accept the watermark on 4.x, which is the free tier,
+* or swap the spatial canvas for an MIT one. the swap is contained: tldraw is touched by
+  `web/src/useAlignedCamera.ts` and the spatial component only, because the coordinate contract
+  lives in `align.mjs` behind a pure function with its own test. Konva (MIT) covers frames,
+  transforms, selection and snapping; the 3d overlay does not care which canvas is underneath it.
+
+what is not on loan is the node layer: **@xyflow/react and @dagrejs/dagre are MIT, with no version
+of this question.**
+
+## 12. what is not decided here
 
 the licence. whether boards are multiplayer. whether a preset can be authored by a user inside the product, which both products in `docs/research.md` are moving toward and which is a different product surface than shipping six of them.
 

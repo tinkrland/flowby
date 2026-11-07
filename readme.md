@@ -30,6 +30,7 @@ bin/flowby modes                   the three doors in, and the crossing out of e
 bin/flowby presets                 the menu, with each preset's honest state
 bin/flowby legend                  the four wires, and the roles that ride them
 bin/flowby demo                    build a board, print both views and every wire
+bin/flowby graph                   the node layer for the browser, with no geometry in it
 bin/flowby sidebar sketch-1        what clicking that element opens
 bin/flowby plan                    compile the board into an execution plan
 bin/flowby plan --preset animate-composition --set duration=8
@@ -143,6 +144,24 @@ two of the collapses are worth pulling out because they are where a catalogue us
 
 a preset is one click. a chain of presets is a workflow, and a workflow worth running twice is worth naming. `scene.record(element)` returns the chain in the order it was built, with its values and its measured cost, and `scene.replay(element, recipe)` applies it to another frame in one call. nothing new is stored, because the chain was always the recipe: it can be read back instead of saved.
 
+## the two libraries it does not write itself
+
+**@xyflow/react** (React Flow, MIT) draws the node layer and **@dagrejs/dagre** (MIT) decides where
+nodes sit. this is deliberate: the interesting problem here is the seam between the two views, not
+bezier maths and hit-testing. python stopped emitting pixel positions the day dagre arrived, because
+two layout systems disagree by default and a node a person dragged was lost on the next render. the
+graph now reports `rank` and `row`, and geometry has exactly one owner.
+
+the seam is testable from node with no DOM, which is the point of `web/src/graph.mjs`: the browser's
+palette is compared against `bin/flowby --json legend`, a wire into a port that does not exist
+refuses by name, the layout is deterministic across runs, and no two nodes overlap.
+
+the spatial canvas is the honest exception. **tldraw is source-available, not open source**: 2.x and
+3.x are licensed for non-commercial use, and 4.x forbids production deployment without a licence key
+and enforces it. so `tldraw@2.4.6` is on loan while this is a development project, and decision 11
+in `theidea/decisions.md` lists the three ways out, including the contained swap to an MIT canvas,
+because the coordinate contract lives in `align.mjs` behind a pure function with its own test.
+
 ## where it runs, and what each place honestly cannot do
 
 the brief asks for a compute loop with no permanent gpu and no cloud floor: a browser drives a free colab runtime, `kernel/kernel.sh` builds the environment inside it, the gpu does the work, and the artifacts post home. that loop is here, and so are the four facts that decide whether it survives a job.
@@ -170,6 +189,9 @@ those numbers are fields on the route, not prose, which is the point: `routes.fi
 | the worker's plumbing, with simulated bytes | verified | manifest digests are real |
 | the worker's model calls | **not written** | `kernel/worker.py` names each op and refuses |
 | the tldraw + r3f camera alignment | verified | `node --test web/tests/align.test.mjs` |
+| the node canvas: palette, wires, layout, refusals | verified | `node --test web/tests/graph.test.mjs` |
+| the node canvas actually drawing | verified | headless chrome: 7 nodes, 5 wires, 12 handles |
+| the spatial canvas being shippable | **licence** | tldraw is source-available, not open source; decision 11 |
 | the react binding | designed | no `node_modules` in this checkout |
 | fastapi, celery, browserbase | designed | imports guarded, `python3 -m app.main` says so |
 

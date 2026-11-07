@@ -31,7 +31,12 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
   web/
     src/align.mjs               the camera maths that makes the two canvases one board
     src/useAlignedCamera.ts     the react binding around it (designed, not built)
+    src/graph.mjs               python's graph -> @xyflow nodes and edges, laid out by dagre
+    src/wires.mjs               the four wire colours, mirrored from dtypes.py and tested
+    src/NodeCanvas.tsx          the node layer: two node shapes, one edge shape, borrowed canvas
+    src/main.tsx                the dev harness, which draws whatever `flowby graph` wrote
     tests/align.test.mjs        the maths, run under node
+    tests/graph.test.mjs        the seam: palette drift, dangling wires, layout, overlaps
   tests/selftest.py             the suite: stdlib only, no network, no gpu
   docs/
     presets.md                  how a preset is written, and what a good one has to say
@@ -46,6 +51,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     2026-11-07-what-the-videos-showed.md
                                 the visual pass, and the fan-out it turned up
     2026-11-07-scope.md         the benefits table with one row missing, and board presets
+    2026-11-07-borrow-the-canvas.md
+                                @xyflow and dagre instead of a hand-rolled node ui
     2026-11-07-the-brief-as-data.md
                                 twenty-nine bullets, sixteen presets, sixteen controls
     2026-11-07-three-doors.md   freeform, fixed and style, and why a door you cannot

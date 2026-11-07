@@ -3,3 +3,5 @@ __pycache__/
 out/
 node_modules/
 .DS_Store
+web/public/graph.json
+web/dist/
