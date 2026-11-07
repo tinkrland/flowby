@@ -91,6 +91,8 @@ class Slider:
         """(node role, param, machine value) for every node this slider moves."""
         self.check(value)
         if self.kind == "choice":
+            # a choice is (what you see, what the node receives). for a prompt fragment the second
+            # is the longer phrase; for a mode name it is the name itself.
             mapped = dict(self.choices)[value]
         else:
             mapped = float(value)
@@ -178,6 +180,8 @@ class Preset:
     sliders: dict[str, Slider]
     slots: tuple[Slot, ...] = ()
     sweep: Sweep | None = None
+    shared_seam: str = ""
+    tail_port: str = ""
     stage: str = "explore"
     flips_plane: str | None = None
     state: str = "designed"
@@ -204,6 +208,23 @@ class Preset:
                     f"which {slot.node} does not take"
                 )
             dtypes.wire(slot.dtype)
+        if self.shared_seam:
+            head = self.steps[self.entry]
+            if self.shared_seam not in head.outputs:
+                raise PresetRefused(
+                    f"{self.name} shares {self.shared_seam!r} but its entry step does not "
+                    f"produce it"
+                )
+            if self.tail_port not in self.steps[self.sink].inputs:
+                raise PresetRefused(
+                    f"{self.name} takes its frame on {self.tail_port!r}, which "
+                    f"{self.sink} does not read"
+                )
+            if self.sweep is not None:
+                raise PresetRefused(
+                    f"{self.name} both shares a head and sweeps a slider; one of those is a "
+                    f"shape this tree has not had to think about yet"
+                )
         if self.sweep is not None and self.sweep.slider not in self.sliders:
             raise PresetRefused(
                 f"{self.name} sweeps {self.sweep.slider!r}, which is not one of its sliders"
@@ -232,6 +253,14 @@ class Preset:
     def minutes(self) -> float:
         return sum(step.requires.get("minutes", 0) for step in self.steps.values())
 
+    @property
+    def scope(self) -> str:
+        """board presets run one head and reach many frames; element presets reach one."""
+        return "board" if self.shared_seam else "element"
+
+    def head_roles(self) -> set[str]:
+        return {self.entry} if self.shared_seam else set()
+
     def branch_point(self) -> str:
         """the node the sweep starts at: the first target of the swept slider."""
         if self.sweep is None:
@@ -253,14 +282,23 @@ class Preset:
                     growing = True
         return reached
 
-    def estimate(self, values: dict | None = None) -> dict:
+    def estimate(self, values: dict | None = None, frames: int = 1) -> dict:
         """what this costs if you press it. both products above show this before the run, not
         after, and it is the single cheapest thing that stops a board from being a slot machine."""
         tail = self.tail()
         copies = len(self.sweep.values) if self.sweep else 1
-        gpu = sum(step.requires.get("minutes", 0) * (copies if role in tail else 1)
+        head = self.head_roles()
+        frames = max(1, frames) if self.shared_seam else 1
+
+        def multiplier(role: str) -> int:
+            # a swept tail repeats per value; a board tail repeats per frame; a head repeats never
+            if role in head:
+                return 1
+            return (copies if role in tail else 1) * frames
+
+        gpu = sum(step.requires.get("minutes", 0) * multiplier(role)
                   for role, step in self.steps.items() if step.requires.get("gpu"))
-        total = sum(step.requires.get("minutes", 0) * (copies if role in tail else 1)
+        total = sum(step.requires.get("minutes", 0) * multiplier(role)
                     for role, step in self.steps.items())
         return {"minutes": round(total, 1),
                 "gpu_minutes": round(gpu, 1),
@@ -268,7 +306,7 @@ class Preset:
                 "models": sorted({m for step in self.steps.values()
                                   for m in (step.requires.get("models") or [])})}
 
-    def sidebar(self, values: dict | None = None) -> dict:
+    def sidebar(self, values: dict | None = None, frames: int = 1) -> dict:
         """the contextual panel's payload: what this preset does, and the controls it exposes."""
         values = {s.name: s.default for s in self.sliders.values()} | (values or {})
         return {
@@ -297,9 +335,10 @@ class Preset:
             "nodes": len(self.steps),
             "stage": self.stage,
             "minutes": self.minutes(),
-            "estimate": self.estimate(values),
+            "estimate": self.estimate(values, frames=frames),
             "slots": [{"name": s.name, "node": s.node, "port": s.port,
                        "dtype": s.dtype, "means": s.means} for s in self.slots],
+            "scope": self.scope,
             "sweep": ({"slider": self.sweep.slider, "label": self.sweep.label,
                        "values": list(self.sweep.values),
                        "variants": len(self.sweep.values)} if self.sweep else None),
@@ -689,6 +728,104 @@ register(Preset(
             name="softness", label="softness", low=0.0, high=1.0, default=0.4,
             means="hard key light through to a big diffused source.",
             targets=(Target("relight", "softness"),),
+        ),
+    },
+))
+
+
+register(Preset(
+    name="studio-light",
+    label="match the light across the board",
+    blurb=("one lighting reference, graded onto every frame you pick. a board that reads as one "
+           "shoot instead of four unrelated renders."),
+    applies_to=("image", "sketch"),
+    input_dtype="image",
+    entry="study",
+    entry_port="reference",
+    sink="grade",
+    tail_port="plate",
+    shared_seam="palette",
+    stage="refine",
+    steps={
+        "study": Step(
+            op="light.study",
+            label="read the reference light",
+            inputs={"reference": Port("image")},
+            outputs={"palette": image("palette")},
+            params={"look": "studio"},
+            requires={"models": ["ic-light"], "gpu": True, "minutes": 0.6},
+        ),
+        "grade": Step(
+            op="light.grade",
+            label="grade onto this frame",
+            inputs={"plate": Port("image"), "palette": image("palette")},
+            outputs={"out": Port("image")},
+            params={"temperature": 0.5, "contrast": 0.5},
+            requires={"models": ["ic-light"], "gpu": True, "minutes": 0.9},
+        ),
+    },
+    edges=(("study", "palette", "grade", "palette"),),
+    sliders={
+        "temperature": Slider(
+            name="temperature", label="warmth", low=0.0, high=1.0, default=0.5,
+            means="cool blue on one side, tungsten on the other.",
+            targets=(Target("grade", "temperature"),),
+        ),
+        "contrast": Slider(
+            name="contrast", label="contrast", low=0.0, high=1.0, default=0.5,
+            means="flat and soft through to a hard ratio.",
+            targets=(Target("grade", "contrast"),),
+        ),
+    },
+))
+
+register(Preset(
+    name="surface-detail",
+    label="add surface detail",
+    blurb="creases, stitches, raised edges or cut-in seams. the difference between a shape and a made object.",
+    applies_to=("model",),
+    input_dtype="mesh",
+    entry="read",
+    entry_port="geometry",
+    sink="carve",
+    stage="refine",
+    steps={
+        "read": Step(
+            op="mesh.read",
+            label="read the surface",
+            inputs={"geometry": Port("mesh")},
+            outputs={"out": Port("mesh"), "guide": image("depth")},
+            params={"resolution": 1024},
+            requires={"pip": ["trimesh", "pillow"], "minutes": 0.3},
+        ),
+        "carve": Step(
+            op="mesh.detail",
+            label="carve the detail",
+            inputs={"geometry": Port("mesh"), "guide": image("depth")},
+            outputs={"out": Port("mesh")},
+            params={"detail": "crease", "depth": 0.6, "width": 0.4},
+            requires={"pip": ["trimesh"], "gpu": True, "minutes": 0.8},
+        ),
+    },
+    edges=(("read", "out", "carve", "geometry"), ("read", "guide", "carve", "guide")),
+    sliders={
+        "detail": Slider(
+            name="detail", label="detail", low=0.0, high=3.0, default="crease",
+            kind="choice",
+            means=("crease cuts soft folds into it, as in worn cloth. stitch lays a tailored line "
+                   "along a seam. emboss raises a patch. deboss cuts the same shape in."),
+            choices=(
+                ("crease", "crease"),
+                ("stitch", "stitch"),
+                ("emboss", "emboss"),
+                ("deboss", "deboss"),
+            ),
+            targets=(Target("carve", "detail"),),
+        ),
+        "depth": Slider(
+            name="depth", label="depth", low=0.0, high=1.0, default=0.6,
+            means="how far the detail sits off or into the surface.",
+            targets=(Target("carve", "depth"),),
         ),
     },
 ))

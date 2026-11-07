@@ -178,6 +178,12 @@ class PresetGraphs(unittest.TestCase):
             graph.add_edge("source", "media", preset.entry, preset.entry_port)
             for a, ap, b, bp in preset.edges:
                 graph.add_edge(a, ap, b, bp)  # raises if a preset disagrees with itself
+            if preset.tail_port:
+                # a board preset takes its frames from outside the template, so the fixture has to
+                # stand one frame in or the template looks broken when it is only incomplete.
+                graph.add(Node("frame", "element.standin",
+                               outputs={"media": Port(preset.input_dtype)}))
+                graph.add_edge("frame", "media", preset.sink, preset.tail_port)
             for slot in preset.slots:
                 graph.add(Node(f"slot:{slot.name}", "element.standin",
                                outputs={"media": Port(slot.dtype)}))
@@ -454,6 +460,84 @@ class Board(unittest.TestCase):
         for node in view["nodes"]:
             self.assertIn("x", node["pos"])
             self.assertIn("y", node["pos"])
+
+
+class BoardScope(unittest.TestCase):
+    """a preset whose head runs once and whose tail reaches several frames."""
+
+    def frames(self, count=3):
+        scene = Scene()
+        return scene, [scene.add("image", f"plate {i}", asset=ASSET) for i in range(1, count + 1)]
+
+    def test_one_style_read_grades_every_frame(self):
+        scene, frames = self.frames(3)
+        scene.apply_shared(frames[0].id, [f.id for f in frames], "studio-light")
+        document = compiler.plan(scene)
+        studies = [s for s in document["steps"] if s["op"] == "light.study"]
+        grades = [s for s in document["steps"] if s["op"] == "light.grade"]
+        self.assertEqual(len(studies), 1, "a board reads its light once, not once per frame")
+        self.assertEqual(len(grades), 3)
+        for grade in grades:
+            self.assertIn(studies[0]["id"] + ":palette", grade["inputs"]["palette"])
+        self.assertEqual({g["inputs"]["plate"] for g in grades},
+                         {f"image-{i}:media" for i in (1, 2, 3)})
+
+    def test_the_shared_head_is_one_node_and_not_one_per_frame(self):
+        scene, frames = self.frames(3)
+        scene.apply_shared(frames[0].id, [f.id for f in frames], "studio-light")
+        attached = [n for n in scene.graph.nodes if n.startswith("board/studio-light/")]
+        self.assertEqual(len(attached), 1 + 3, "three elements, one head, three tails")
+
+    def test_the_style_is_paid_for_once(self):
+        scene, frames = self.frames(3)
+        scene.apply_shared(frames[0].id, [f.id for f in frames], "studio-light")
+        cost = compiler.plan(scene)["cost"]
+        self.assertAlmostEqual(cost["gpu_minutes"], 0.6 + 3 * 0.9, places=1)
+        self.assertEqual(len(compiler.plan(scene)["artifacts"]), 3)
+
+    def test_a_frame_that_joins_later_does_not_reread_the_light(self):
+        scene, frames = self.frames(3)
+        scene.apply_shared(frames[0].id, [f.id for f in frames], "studio-light")
+        fourth = scene.add("image", "plate 4", asset=ASSET)
+        scene.apply_shared(frames[0].id, [fourth.id], "studio-light")
+        document = compiler.plan(scene)
+        self.assertEqual(len([s for s in document["steps"] if s["op"] == "light.study"]), 1)
+        self.assertEqual(len(document["artifacts"]), 4)
+
+    def test_a_board_preset_on_one_frame_still_goes_through_the_head(self):
+        scene, frames = self.frames(1)
+        instance = scene.apply(frames[0].id, "studio-light")
+        self.assertTrue(instance.shared)
+        self.assertEqual([s["op"] for s in compiler.plan(scene)["steps"]],
+                         ["element.image", "light.study", "light.grade"])
+
+    def test_a_board_preset_refuses_a_frame_showing_the_wrong_wire(self):
+        scene = Scene()
+        plate = scene.add("image", "plate", asset=ASSET)
+        bust = scene.add("model", "bust", asset=MODEL_ASSET)
+        with self.assertRaises(SceneRefused) as caught:
+            scene.apply_shared(plate.id, [bust.id], "studio-light")
+        self.assertIn("red", str(caught.exception))
+
+    def test_the_sidebar_says_which_frames_a_board_preset_reaches(self):
+        scene, frames = self.frames(2)
+        scene.apply_shared(frames[0].id, [f.id for f in frames], "studio-light")
+        panel = [p for p in scene.sidebar(frames[1].id)["presets"]
+                 if p["preset"] == "studio-light"][0]
+        self.assertEqual(panel["scope"], "board")
+        self.assertEqual(panel["reaches"], [frames[0].id, frames[1].id])
+        self.assertEqual(panel["estimate"]["gpu_minutes"], 0.6 + 2 * 0.9)
+
+    def test_surface_detail_offers_the_four_things_the_reference_names(self):
+        preset = presets.get("surface-detail")
+        self.assertEqual([c[0] for c in preset.sliders["detail"].choices],
+                         ["crease", "stitch", "emboss", "deboss"])
+        scene = Scene()
+        bust = scene.add("model", "bust", asset=MODEL_ASSET)
+        scene.apply(bust.id, "surface-detail", {"detail": "deboss", "depth": 0.2})
+        carve = scene.graph.nodes["model-1/surface-detail/carve"]
+        self.assertEqual(carve.params["detail"], "deboss")
+        self.assertAlmostEqual(carve.params["depth"], 0.2)
 
 
 class Sweeps(unittest.TestCase):

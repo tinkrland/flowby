@@ -74,7 +74,24 @@ class Instance:
     sink: str = ""
     values: dict = field(default_factory=dict)
     aux: dict = field(default_factory=dict)
+    elements: list[str] = field(default_factory=list)
+    sinks: dict = field(default_factory=dict)
+    head: tuple = ()
     detached: bool = False
+
+    @property
+    def shared(self) -> bool:
+        """a board instance runs one head and points several frames at its tails."""
+        return bool(self.head)
+
+    def sink_for(self, element_id: str) -> str:
+        return self.sinks.get(element_id, self.sink)
+
+    def param_nodes(self, role: str) -> list[str]:
+        """the node, or the one node per frame, that a slider's value belongs on."""
+        if self.shared and role not in self.head:
+            return [f"{self.id}/{element}/{role}" for element in self.elements]
+        return [f"{self.id}/{role}"]
 
     def complete(self) -> bool:
         """false while a slot is still empty, which is what makes the preset refuse to compile."""
@@ -171,6 +188,79 @@ class Scene:
 
     # -- presets -----------------------------------------------------------
 
+    def _checked(self, preset: presets.Preset, values: dict | None) -> dict:
+        values = dict(values or {})
+        for name, value in values.items():
+            if name not in preset.sliders:
+                raise SceneRefused(
+                    f"{preset.name} has no control {name!r}. it has {', '.join(preset.sliders)}."
+                )
+            preset.sliders[name].check(value)
+        return values
+
+    def _readable(self, element: "Element", preset: presets.Preset) -> tuple[str, str]:
+        """what this frame is showing, and whether the preset can read it."""
+        source = element.display or element.id
+        node = self.graph.nodes.get(source)
+        if node is None:
+            raise SceneRefused(f"{element.label} is showing {source}, which is not a node")
+        port = next(iter(node.outputs))
+        carried = node.outputs[port].dtype
+        if carried != preset.input_dtype:
+            hint = _how_to_get_there(carried, preset.input_dtype)
+            raise SceneRefused(
+                f"{preset.label} reads a {dtypes.colour(preset.input_dtype)} wire, and "
+                f"{element.label} is showing a {dtypes.colour(carried)} one."
+                + (f" {hint}" if hint else "")
+            )
+        return source, port
+
+    def apply_shared(self, reference_id: str, target_ids, preset_name: str,
+                     values: dict | None = None) -> Instance:
+        """one lighting reference, graded onto several frames.
+
+        this is the scope the reference product calls design dna: a preset whose *head* runs once
+        for the whole board and whose tail lands on every frame you point at it. the shared node is
+        a single node in the graph, so six frames cost one style read and six grades, and the
+        pipeline view shows one wire fanning out into six rather than six separate readings.
+        """
+        preset = presets.get(preset_name)
+        if not preset.shared_seam:
+            raise SceneRefused(
+                f"{preset.label} works on one frame at a time. it has no head to share."
+            )
+        reference = self._element(reference_id)
+        targets = [self._element(i) for i in target_ids]
+        if not targets:
+            raise SceneRefused(f"{preset.label} needs at least one frame to reach")
+        values = self._checked(preset, values)
+        source, port = self._readable(reference, preset)
+        for target in targets:
+            self._readable(target, preset)
+
+        instance = self._live_instance(reference_id, preset_name)
+        if instance is None or not instance.shared:
+            instance = self._spawn_shared(reference, targets, preset, source, port)
+        for target in targets:
+            if target.id not in instance.elements:
+                self._extend_instance(instance, preset, target)
+
+        merged = {s.name: s.default for s in preset.sliders.values()}
+        merged.update(instance.values)
+        merged.update(values)
+        instance.values = merged
+        for slider in preset.sliders.values():
+            for role, param, machine in slider.project(merged[slider.name]):
+                for node_id in instance.param_nodes(role):
+                    self.graph.nodes[node_id].params[param] = machine
+        for target in targets:
+            target.display = instance.sink_for(target.id)
+            if preset.flips_plane and target.plane != preset.flips_plane:
+                target.plane = preset.flips_plane
+                target.history.append(f"{preset.name}: plane {target.plane}")
+            target.history.append(f"{preset.name} reached this frame")
+        return instance
+
     def apply(self, element_id: str, preset_name: str, values: dict | None = None) -> Instance:
         """spawn the preset's subgraph and point the element at its result.
 
@@ -180,30 +270,15 @@ class Scene:
         """
         element = self._element(element_id)
         preset = presets.get(preset_name)
-        values = dict(values or {})
-        for name, value in values.items():
-            if name not in preset.sliders:
-                raise SceneRefused(
-                    f"{preset.name} has no control {name!r}. it has "
-                    f"{', '.join(preset.sliders)}."
-                )
-            preset.sliders[name].check(value)
+        values = self._checked(preset, values)
+        if preset.scope == "board":
+            # a board preset reaches one frame fine; it just does it through the shared head, so
+            # there is one way to build the shape rather than two that disagree.
+            return self.apply_shared(element_id, [element_id], preset_name, values)
 
         instance = self._live_instance(element_id, preset_name)
         if instance is None:
-            source = element.display or element.id
-            source_node = self.graph.nodes.get(source)
-            if source_node is None:
-                raise SceneRefused(f"{element.label} is showing {source}, which is not a node")
-            port = next(iter(source_node.outputs))
-            source_dtype = source_node.outputs[port].dtype
-            if source_dtype != preset.input_dtype:
-                hint = _how_to_get_there(source_dtype, preset.input_dtype)
-                raise SceneRefused(
-                    f"{preset.label} reads a {dtypes.colour(preset.input_dtype)} wire, and "
-                    f"{element.label} is showing a {dtypes.colour(source_dtype)} one."
-                    + (f" {hint}" if hint else "")
-                )
+            source, port = self._readable(element, preset)
             instance = self._spawn(element, preset, source, port)
 
         merged = {s.name: s.default for s in preset.sliders.values()}
@@ -212,7 +287,8 @@ class Scene:
         instance.values = merged
         for slider in preset.sliders.values():
             for role, param, machine in slider.project(merged[slider.name]):
-                self.graph.nodes[f"{instance.id}/{role}"].params[param] = machine
+                for node_id in instance.param_nodes(role):
+                    self.graph.nodes[node_id].params[param] = machine
         element.display = instance.sink
         if preset.flips_plane and element.plane != preset.flips_plane:
             element.plane = preset.flips_plane
@@ -223,7 +299,7 @@ class Scene:
         """how many results the thing the frame is drawing produced. 1 for a plain preset."""
         element = self._element(element_id)
         for instance in self.instances.values():
-            if instance.sink == element.display and not instance.detached:
+            if instance.sink_for(element.id) == element.display and not instance.detached:
                 preset = presets.get(instance.preset)
                 return len(preset.sweep.values) if preset.sweep else 1
         return 1
@@ -255,17 +331,94 @@ class Scene:
     def _live_instance(self, element_id: str, preset_name: str) -> Instance | None:
         """the one already on this element, so clicking twice lowers the same slider twice."""
         for inst in self.instances.values():
-            if (inst.element == element_id and inst.preset == preset_name
+            if (element_id in inst.elements and inst.preset == preset_name
                     and not inst.detached):
                 return inst
         return None
+
+    def _spawn_shared(self, reference: Element, targets: list[Element], preset: presets.Preset,
+                      source: str, source_port: str) -> Instance:
+        index = 1 + sum(1 for i in self.instances.values()
+                        if i.preset == preset.name and i.shared)
+        instance_id = f"board/{preset.name}" + (f"@{index}" if index > 1 else "")
+        instance = Instance(id=instance_id, element=reference.id, preset=preset.name,
+                            elements=[], head=tuple(sorted(preset.head_roles())))
+        for role in instance.head:
+            step = preset.steps[role]
+            node_id = f"{instance_id}/{role}"
+            self.graph.add(Node(
+                id=node_id, op=step.op, inputs=dict(step.inputs), outputs=dict(step.outputs),
+                params=dict(step.params), requires=dict(step.requires),
+                label=step.label, instance=instance_id,
+            ))
+            instance.nodes.append(node_id)
+        instance.sink = f"{instance_id}/{preset.sink}"
+        instance.aux = {slot.name: None for slot in preset.slots}
+        self.instances[instance_id] = instance
+        try:
+            self.graph.add_edge(source, source_port,
+                                f"{instance_id}/{preset.entry}", preset.entry_port)
+        except GraphRefused as refusal:
+            self.instances.pop(instance_id, None)
+            for node_id in instance.nodes:
+                if node_id in self.graph.nodes:
+                    self.graph.remove(node_id)
+            raise SceneRefused(
+                f"{preset.name} could not read {reference.label}: {refusal}"
+            ) from None
+        for target in targets:
+            self._extend_instance(instance, preset, target)
+        return instance
+
+    def _extend_instance(self, instance: Instance, preset: presets.Preset,
+                         element: Element) -> None:
+        """add one more frame to a board preset's tail, wired from the one shared head."""
+        base = f"{instance.id}/{element.id}"
+        added: list[str] = []
+        for role, step in preset.steps.items():
+            if role in instance.head:
+                continue
+            node_id = f"{base}/{role}"
+            self.graph.add(Node(
+                id=node_id, op=step.op, inputs=dict(step.inputs), outputs=dict(step.outputs),
+                params=dict(step.params), requires=dict(step.requires),
+                label=step.label, instance=instance.id,
+            ))
+            added.append(node_id)
+        source = element.display or element.id
+        source_node = self.graph.nodes.get(source)
+        if source_node is None:
+            self._unwind(added)
+            raise SceneRefused(f"{element.label} is showing {source}, which is not a node")
+        try:
+            self.graph.add_edge(source, next(iter(source_node.outputs)),
+                                f"{base}/{preset.sink}", preset.tail_port)
+            for a, ap, b, bp in preset.edges:
+                src = f"{instance.id}/{a}" if a in instance.head else f"{base}/{a}"
+                dst = f"{instance.id}/{b}" if b in instance.head else f"{base}/{b}"
+                self.graph.add_edge(src, ap, dst, bp)
+        except GraphRefused as refusal:
+            self._unwind(added)
+            raise SceneRefused(
+                f"{preset.name} could not reach {element.label}: {refusal}"
+            ) from None
+        instance.nodes.extend(added)
+        if element.id not in instance.elements:
+            instance.elements.append(element.id)
+        instance.sinks[element.id] = f"{base}/{preset.sink}"
+
+    def _unwind(self, node_ids: list[str]) -> None:
+        for node_id in node_ids:
+            if node_id in self.graph.nodes:
+                self.graph.remove(node_id)
 
     def _spawn(self, element: Element, preset: presets.Preset,
                source: str, source_port: str) -> Instance:
         index = 1 + sum(1 for i in self.instances.values()
                         if i.element == element.id and i.preset == preset.name)
         instance_id = f"{element.id}/{preset.name}" + (f"@{index}" if index > 1 else "")
-        instance = Instance(id=instance_id, element=element.id, preset=preset.name)
+        instance = Instance(id=instance_id, element=element.id, preset=preset.name,
+                            elements=[element.id])
         for role, step in preset.steps.items():
             self.graph.add(Node(
                 id=f"{instance_id}/{role}",
@@ -279,6 +432,7 @@ class Scene:
             ))
             instance.nodes.append(f"{instance_id}/{role}")
         instance.sink = f"{instance_id}/{preset.sink}"
+        instance.sinks = {element.id: instance.sink}
         instance.aux = {slot.name: None for slot in preset.slots}
         try:
             self.graph.add_edge(source, source_port,
@@ -337,7 +491,7 @@ class Scene:
         applicable = []
         rendered = self.rendered_dtype(element_id)
         for preset in presets.PRESETS.values():
-            already = any(i.element == element.id and i.preset == preset.name
+            already = any(element.id in i.elements and i.preset == preset.name
                           and not i.detached for i in self.instances.values())
             if preset.input_dtype != rendered and not already:
                 continue
@@ -351,8 +505,8 @@ class Scene:
                 "applied": None,
             }
             for inst in self.instances.values():
-                if inst.element == element.id and inst.preset == preset.name and not inst.detached:
-                    panel = preset.sidebar(inst.values)
+                if element.id in inst.elements and inst.preset == preset.name and not inst.detached:
+                    panel = preset.sidebar(inst.values, frames=len(inst.elements))
                     entry["applied"] = panel["controls"]
                     entry["estimate"] = panel["estimate"]
                     entry["stage"] = panel["stage"]
@@ -362,6 +516,8 @@ class Scene:
                         for slot in panel["slots"]
                     ]
                     entry["instance"] = inst.id
+                    entry["scope"] = preset.scope
+                    entry["reaches"] = list(inst.elements)
             applicable.append(entry)
         return {
             "element": {
@@ -393,7 +549,7 @@ class Scene:
             {"preset": inst.preset, "values": dict(inst.values),
              "slots": {k: v for k, v in inst.aux.items() if v}}
             for inst in self.instances.values()
-            if inst.element == element.id
+            if element.id in inst.elements
         ]
         return {
             "name": name or f"{element.label} chain",
@@ -439,7 +595,7 @@ class Scene:
                 "chosen": min(e.chosen, max(0, self.variant_count(e.id) - 1)),
                 "transform": vars(e.transform),
                 "presets": [i.preset for i in self.instances.values()
-                            if i.element == e.id and not i.detached],
+                            if e.id in i.elements and not i.detached],
             }
             for e in self.elements.values()
         ]
@@ -449,7 +605,7 @@ class Scene:
         positions = {}
         for index, element in enumerate(self.elements.values()):
             positions[element.id] = {"x": 0.0, "y": index * 160.0}
-            attached = [i for i in self.instances.values() if i.element == element.id]
+            attached = [i for i in self.instances.values() if element.id in i.elements]
             for row, inst in enumerate(attached):
                 for column, node_id in enumerate(inst.nodes):
                     positions[node_id] = {"x": 320.0 + column * 240.0,

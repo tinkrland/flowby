@@ -42,6 +42,7 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     2026-11-07.md               the day the board existed and the graph under it
     2026-11-07-what-the-videos-showed.md
                                 the visual pass, and the fan-out it turned up
+    2026-11-07-scope.md         the benefits table with one row missing, and board presets
 ```
 
 two things are deliberately absent from `src/`. there is no database layer, so a board lives in memory and the cli builds its own; and there is no queue, so `job.Store` is a dict with a state machine rather than redis. both are seams the app layer is expected to fill, and neither changes a single rule above them.

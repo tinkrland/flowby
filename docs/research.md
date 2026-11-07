@@ -99,7 +99,59 @@ so the repeated unit across both products is not the preset. it is **one input, 
 parallel results, side by side.** fuser names the set in the recipe; vectary renders it as a labelled
 grid. both then ask you to pick one and keep going.
 
-## what that changed in this tree
+
+## the two screenshots the owner sent
+
+both are from vectary's own preset marketing, and together they answer a question the landing page
+only gestures at: *what* is in the catalogue, and *why* a preset rather than a prompt.
+
+### the presets are organised by surface, not by model
+
+four families, each with a demo video attached:
+
+* **texturing and materials**: extract, generate and test physical pbr textures, normal maps and
+  realistic 3d materials *on your shapes*.
+* **surface details and textures**: crease (realistic clothing wrinkles), stitches (tailored lines),
+  emboss and deboss (flat or 3d embroidery effects).
+* **lighting and environments**: modify, test and adapt studio lighting styles or colour palettes
+  **instantly across your infinite board**.
+* **design and ideation**: rough sketches into photoreal visuals, mapping geometric patterns,
+  generating 3d variations from 2d layers, replacing a specific object in a frame.
+
+that list is a designer's vocabulary, not a model list. crease and stitch are things you do to a
+garment; "extract a normal map" is something you do to a material. nothing in it names a model, and
+every entry could be answered by a person who has never heard of the model behind it.
+
+### their benefits table is this tree's architecture, one row short
+
+| their feature | their claim | what it is in flowby |
+| --- | --- | --- |
+| less prompting | replaces long text instructions with curated task blocks | the preset, as a subgraph with sliders |
+| preset chaining | combine and stack multiple presets on top of the same concept asset | `scene.apply` reading the element's *current display* |
+| design dna matching | presets configured to transfer a specific design language **across layouts** | the one row this tree did not have |
+
+the middle row was already the rule that made chaining work. the third row is a **scope**: a preset
+whose head runs once and whose tail reaches several frames. "across layouts", "across your infinite
+board", "brand consistency" are all the same sentence about a single expensive read feeding many
+cheap applications.
+
+### what that changed
+
+`Preset.scope`, as a `shared_seam` and a `tail_port`. `studio-light` is the board preset: one
+lighting reference frame, graded onto every frame you point at it, so three frames cost one style
+read and three grades. `surface-detail` is the catalogue made concrete: crease, stitch, emboss,
+deboss, as a choice control on one mesh node.
+
+two details worth keeping in mind from their framing rather than their mechanism:
+
+* **the videos are per feature, not per product.** four families, four demos. a preset that needs a
+  video to explain itself is a preset whose name is not doing its job, and that is a reason to keep
+  the labels as sentences.
+* **nothing in their copy mentions a node graph, and the graph is still there.** the user's summary
+  of it was exact: it is a node canvas whose nodes are premade presets. the abstraction is the
+  product and the graph is the honesty underneath it, which is the same bet this tree makes.
+
+## what the visual pass changed in this tree
 
 one thing, and it was the biggest gap: flowby produced exactly one artifact per element, so every
 preset was a single shot and the board could only ever show one answer.

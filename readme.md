@@ -63,6 +63,8 @@ every preset below is task-named, because the unit a person thinks in is the tas
 | `style-transfer` | green | green | explore | 2 | 2 |
 | `animate-composition` | red | blue | output | 3 | 3 |
 | `relight` | green | green | explore | 2 | 2 |
+| `studio-light` | green | green | refine | 2 | 2 |
+| `surface-detail` | red | red | refine | 2 | 2 |
 | `code-container` | green | green | refine | 1 | 0 |
 
 three things about that table are load bearing.
@@ -74,6 +76,12 @@ three things about that table are load bearing.
 **one click can come back with several results.** `relight` is a **sweep**: one photograph, six lighting setups, side by side, because that is what both reference products actually ship and it is the most useful thing on either page. the compiler treats it as a branch rather than a loop. the work before the swept node runs **once** and only the tail is copied, so six relights of one plate is one read and six renders, not six of everything. the cost says so: 0.3 minutes of shared work and 6.6 of gpu, and the plan carries eight steps, not twelve.
 
 `scene.show_variant` picks one to keep looking at, and picking is a pointer rather than a re-run. every variant was produced, the artifact names carry the number (`sketch-1#1.png` through `#6`), and the frame that receives them gets one group instead of one image.
+
+**some presets are not about one frame.** `studio-light` is a **board** preset: one lighting reference, graded onto every frame you point it at, so a board reads as one shoot instead of four unrelated renders. the head of its subgraph runs **once** and the tail lands per frame, which is why three frames cost one light read and three grades (0.6 + 3 × 0.9 minutes) and the pipeline view shows one wire fanning into three. their own benefits table calls this design dna matching; the mechanism is a shared node, not a copy of one.
+
+that is the only place the two scopes differ. everything else about a board preset behaves like the rest of this tree: it chains off what each frame is showing, it refuses a frame on the wrong wire, and it can be broken apart into the same nodes.
+
+**the catalogue is named after surfaces, not models.** `surface-detail` offers crease, stitch, emboss and deboss, because "which thing do you want done to this mesh" is a question a designer can answer and "which of 169 video models" is not.
 
 **one preset cannot fill its own inputs, and says so.** `style-transfer` needs a second asset, the look it copies. it spawns with an empty slot, refuses to compile while the slot is empty, and the refusal names the slot. filling it is `scene.link`, which is one drag in the node view.
 
@@ -101,6 +109,7 @@ those numbers are fields on the route, not prose, which is the point: `routes.fi
 | wires, graph, presets, chaining, slots | verified | `tests/selftest.py` |
 | the compiled plan, its cost, its refusals | verified | `tests/selftest.py` |
 | the sweep: shared head, copied tail, one artifact per variant | verified | `tests/selftest.py` |
+| board scope: one head reaching several frames | verified | `tests/selftest.py` |
 | the route table and its refusals | verified | `tests/selftest.py` |
 | job lifecycle, artifact checking, watchdog | verified | `tests/selftest.py` |
 | `kernel.sh` parsing and dry run | verified | run as a subprocess |

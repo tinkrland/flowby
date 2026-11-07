@@ -37,6 +37,10 @@ UNIMPLEMENTED = {
     "light.meter": "a white balance read",
     "light.relight": "ic-light weights",
     "code.python": "the code in the container, which only the container can run",
+    "light.study": "ic-light weights",
+    "light.grade": "ic-light weights",
+    "mesh.read": "trimesh, to bake a depth guide",
+    "mesh.detail": "trimesh, to cut geometry",
 }
 
 ELEMENT = "element."
