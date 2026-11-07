@@ -159,6 +159,21 @@ class Step:
     outputs: dict[str, Port] = field(default_factory=dict)
     params: dict = field(default_factory=dict)
     requires: dict = field(default_factory=dict)
+    # the artifact kind this step's output leaves the graph as, when that is not just its wire.
+    # a font is the case: the wire it travels on is text (the family name), and what the user
+    # receives is an .otf/.ttf/.woff bundle. artifacts.KINDS says which kinds exist.
+    deliverable: str | None = None
+
+    def node_params(self) -> dict:
+        """the params a board node starts with: the step's own, plus what it delivers when set.
+
+        the deliverable rides in params because the spawner already copies them and the compiler
+        already reads them, so no graph node needed a new field and no existing node changed.
+        """
+        out = dict(self.params)
+        if self.deliverable:
+            out["deliverable"] = self.deliverable
+        return out
 
 
 def image(role: str | None = None, **kw) -> Port:
@@ -1593,12 +1608,80 @@ register(Preset(
 ))
 
 
+register(Preset(
+    name="handwriting-to-font",
+    label="handwriting to font",
+    blurb=("scan a practice sheet and get a font back: the letters are found, traced, and packed, "
+           "and a row that cannot be named is refused instead of silently dropped."),
+    applies_to=("image", "sketch"),
+    input_dtype="image",
+    entry="detect",
+    entry_port="sheet",
+    sink="pack",
+    stage="refine",
+    steps={
+        "detect": Step(
+            op="font.detect",
+            label="find the letters",
+            inputs={"sheet": Port("image")},
+            outputs={"out": Port("image", role="mask")},
+            params={"blur": 1, "threshold": None, "invert": False, "dilate": 1,
+                    "min_size": 0.0002, "max_size": 0.2},
+            requires={"runtime": "browser", "minutes": 0.1},
+        ),
+        "pack": Step(
+            op="font.pack",
+            label="trace and pack the font",
+            inputs={"letters": Port("image", role="mask")},
+            outputs={"out": Port("text")},
+            params={"family": "Handwriting", "formats": ["otf", "ttf", "woff"],
+                    "epsilon": 1.5, "allow_partial": False},
+            requires={"runtime": "browser", "minutes": 0.1},
+            deliverable="font",
+        ),
+    },
+    edges=(("detect", "out", "pack", "letters"),),
+    sliders={
+        "threshold": Slider(
+            name="threshold", label="ink threshold", low=0, high=255, default="auto",
+            kind="choice", choices=(("auto", None), ("light", 180), ("medium", 140), ("heavy", 100)),
+            means="where paper ends and ink begins. auto finds it from the page, the others force it.",
+            targets=(Target("detect", "threshold"),),
+        ),
+        "invert": Slider(
+            name="invert", label="light ink on dark paper", low=0, high=1, default="no",
+            kind="choice", choices=(("no", False), ("yes", True)),
+            means="turn on for chalk, or a scan where the ink reads lighter than the page.",
+            targets=(Target("detect", "invert"),),
+        ),
+        "blur": Slider(
+            name="blur", label="smooth the scan", low=0.0, high=3.0, default=1.0,
+            means="softens paper grain before the ink is found. too high and thin strokes break.",
+            targets=(Target("detect", "blur"),),
+        ),
+        "join": Slider(
+            name="join", label="join broken strokes", low=0, high=3, default=1,
+            means="closes small gaps inside a letter. too high and neighbours fuse into one.",
+            targets=(Target("detect", "dilate"),),
+        ),
+        "smoothness": Slider(
+            name="smoothness", label="outline smoothness", low=0.5, high=4.0, default=1.5,
+            means="how much the traced outline is simplified. low keeps every wobble.",
+            targets=(Target("pack", "epsilon"),),
+        ),
+    },
+))
+
+
 PROCEDURAL = {
     "frosted-glass": "shading maths on a material, which is arithmetic rather than inference",
     "animate-composition": "a camera move and a render, which is exactly what they say they are",
     "code-container": "your own code, which is the one thing a model should not be guessing at",
     "3d-text": ("extrusion and bevelling is geometry maths, and the material is a second preset "
                 "rather than a guess"),
+    "handwriting-to-font": ("thresholding, connected components and outline tracing on a scan: "
+                            "image maths that runs in the browser, and a model would only guess at "
+                            "letters it can measure"),
 }
 
 

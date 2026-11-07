@@ -153,11 +153,16 @@ def plan(scene, route: str | None = None, present: set[str] | None = None,
 
     artifacts = []
     for element_id, shown in display.items():
-        suffix = outputs.suffix_for_wire(shown["dtype"])
+        deliverable = (scene.graph.nodes[shown["node"]].params or {}).get("deliverable")
+        kind = deliverable or outputs.kind_for_wire(shown["dtype"])
+        if kind not in outputs.KINDS:
+            raise CompileRefused(f"{shown['node']} delivers {kind!r}, which is not an artifact kind. "
+                                 f"the kinds are {', '.join(outputs.KINDS)}.")
+        suffix = outputs.KINDS[kind]["primary"]
         owner = tail_of.get(shown["node"])
         if owner is None:
             artifacts.append({"name": f"{element_id}.{suffix}", "dtype": shown["dtype"],
-                              "kind": outputs.kind_for_wire(shown["dtype"]),
+                              "kind": kind, "files": list(outputs.KINDS[kind]["files"]),
                               "element": element_id, "variant": None})
             continue
         count = len(found[owner][1])
@@ -165,7 +170,7 @@ def plan(scene, route: str | None = None, present: set[str] | None = None,
         shown["chosen"] = min(scene.elements[element_id].chosen, count - 1)
         for i in range(1, count + 1):
             artifacts.append({"name": f"{element_id}#{i}.{suffix}", "dtype": shown["dtype"],
-                              "kind": outputs.kind_for_wire(shown["dtype"]),
+                              "kind": kind, "files": list(outputs.KINDS[kind]["files"]),
                               "element": element_id, "variant": i})
 
     board = [

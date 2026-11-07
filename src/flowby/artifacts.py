@@ -38,10 +38,12 @@ KINDS = {
               "files": ("glb",), "mime": {"glb": "model/gltf-binary"}},
     "text": {"wire": "text", "label": "text", "primary": "txt",
              "files": ("txt",), "mime": {"txt": "text/plain"}},
+    # woff2 is deliberately absent. it needs brotli, which the browser pipeline does not have, and
+    # fontasy's own woff2 button exports a .woff under that name. a kind that lists a file nothing
+    # can produce is a promise the plan makes and the worker cannot keep.
     "font": {"wire": None, "label": "font", "primary": "otf",
-             "files": ("otf", "ttf", "woff", "woff2"),
-             "mime": {"otf": "font/otf", "ttf": "font/ttf",
-                      "woff": "font/woff", "woff2": "font/woff2"}},
+             "files": ("otf", "ttf", "woff"),
+             "mime": {"otf": "font/otf", "ttf": "font/ttf", "woff": "font/woff"}},
     "lettering": {"wire": None, "label": "lettering", "primary": "png",
                   "files": ("png", "svg"),
                   "mime": {"png": "image/png", "svg": "image/svg+xml"}},

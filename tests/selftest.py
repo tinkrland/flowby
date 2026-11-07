@@ -1200,6 +1200,51 @@ class Kernel(unittest.TestCase):
                 self.assertIn(step.op, known,
                               f"{name} declares {step.op}, which the worker cannot run")
 
+    def test_browser_ops_are_named_by_the_worker_and_refused_even_when_simulating(self):
+        # the worker lists them so a typo is still a typo, and refuses them so a font is never faked.
+        plan = compiler.preset_plan("handwriting-to-font")
+        ops = {s["op"] for s in plan["steps"]}
+        self.assertTrue({"font.detect", "font.pack"} <= ops)
+        # the only other op is the element the sheet was dropped on, which is data and not a step
+        self.assertTrue(all(o.startswith(("font.", "element.")) for o in ops), ops)
+        directory = pathlib.Path(tempfile.mkdtemp())
+        (directory / "plan.json").write_text(json.dumps(plan))
+        for flag in ([], ["--simulate"]):
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "kernel" / "worker.py"),
+                 "--plan", str(directory / "plan.json"), "--outdir", str(directory / "out")] + flag,
+                capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0, flag)
+            self.assertIn("runs in the browser", result.stdout + result.stderr)
+        self.assertFalse(list((directory / "out").glob("*.otf")) if (directory / "out").exists() else [])
+
+    def test_the_font_kind_lists_exactly_the_formats_the_browser_pipeline_can_write(self):
+        # two files said what a font is and disagreed: the kind listed woff2, the pipeline refuses it.
+        # the pipeline's own list is the source, so read it from there and not from memory.
+        source = (ROOT / "web" / "src" / "font" / "pipeline.mjs").read_text()
+        match = re.search(r'export const FORMATS = Object\.freeze\(\[([^\]]+)\]\)', source)
+        self.assertIsNotNone(match, "pipeline.mjs no longer exports FORMATS")
+        pipeline = tuple(re.findall(r'"([a-z0-9]+)"', match.group(1)))
+        self.assertEqual(outputs.KINDS["font"]["files"], pipeline)
+        self.assertNotIn("woff2", outputs.KINDS["font"]["files"])
+
+    def test_a_font_preset_declares_the_font_kind_and_only_its_real_files(self):
+        plan = compiler.preset_plan("handwriting-to-font")
+        (art,) = plan["artifacts"]
+        self.assertEqual((art["kind"], art["files"]), ("font", ["otf", "ttf", "woff"]))
+        self.assertTrue(art["name"].endswith(".otf"))
+
+    def test_a_step_that_delivers_an_unknown_kind_is_refused_by_the_compiler(self):
+        scene = Scene()
+        sheet = scene.add("sketch", "the sheet", asset="sha256:" + "a" * 64)
+        scene.apply(sheet.id, "handwriting-to-font")
+        node = next(n for n in scene.graph.nodes.values() if n.op == "font.pack")
+        node.params["deliverable"] = "spreadsheet"
+        scene.show(sheet.id, node.id)
+        with self.assertRaises(compiler.CompileRefused) as cm:
+            compiler.plan(scene)
+        self.assertIn("not an artifact kind", str(cm.exception))
+
     def test_the_worker_writes_a_manifest_a_job_will_accept(self):
         directory = pathlib.Path(tempfile.mkdtemp())
         plan = compiler.preset_plan("sketch-to-mesh")

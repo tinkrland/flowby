@@ -348,7 +348,7 @@ class Scene:
             node_id = f"{instance_id}/{role}"
             self.graph.add(Node(
                 id=node_id, op=step.op, inputs=dict(step.inputs), outputs=dict(step.outputs),
-                params=dict(step.params), requires=dict(step.requires),
+                params=step.node_params(), requires=dict(step.requires),
                 label=step.label, instance=instance_id,
             ))
             instance.nodes.append(node_id)
@@ -381,7 +381,7 @@ class Scene:
             node_id = f"{base}/{role}"
             self.graph.add(Node(
                 id=node_id, op=step.op, inputs=dict(step.inputs), outputs=dict(step.outputs),
-                params=dict(step.params), requires=dict(step.requires),
+                params=step.node_params(), requires=dict(step.requires),
                 label=step.label, instance=instance.id,
             ))
             added.append(node_id)
@@ -425,7 +425,7 @@ class Scene:
                 op=step.op,
                 inputs=dict(step.inputs),
                 outputs=dict(step.outputs),
-                params=dict(step.params),
+                params=step.node_params(),
                 requires=dict(step.requires),
                 label=step.label,
                 instance=instance_id,

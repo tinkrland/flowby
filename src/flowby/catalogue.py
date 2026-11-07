@@ -163,6 +163,8 @@ PRIMITIVES = {
     "code-container": "the escape hatch the brief implies with 'advanced developers'",
     "relight": "one light, one frame: the cheap primitive the studio and environment presets scale",
     "style-transfer": "the third door in its simplest form, before it reaches across a board",
+    "handwriting-to-font": ("the brief names no typography, and the owner's fontasy repos are the "
+                            "case for an output that is a file kind, not a wire"),
 }
 
 

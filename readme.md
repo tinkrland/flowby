@@ -91,6 +91,7 @@ every preset below is task-named, because the unit a person thinks in is the tas
 | `layers-to-3d` | depth-anything, layer-lift | green | red | explore | 2 | 2 |
 | `sketch-to-render` | controlnet-scribble, sdxl-turbo | green | green | refine | 2 | 3 |
 | `3d-text` | none: extrusion and bevelling is geometry maths | amber | red | explore | 2 | 3 |
+| `handwriting-to-font` | none: image maths in the browser; delivers a font bundle, not a wire | green | amber | refine | 2 | 5 |
 | `replace-object` | flux-fill, sam-segment | green | green | refine | 2 | 3 |
 | `place-graphic` | pbr-painter | red | red | refine | 2 | 3 |
 | `clear-interior` | flux-fill, sam-segment | green | green | refine | 2 | 3 |

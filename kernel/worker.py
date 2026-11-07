@@ -22,6 +22,14 @@ import time
 CONTRACT = "flowby/1"
 
 # ops that would call a model, and the honest sentence about each
+# ops that run in the browser, and which function there answers for them. the worker refuses these
+# by name and never simulates them: a simulated font would be a text file called something.otf,
+# which is a promise its bytes do not keep. the pipeline is web/src/font/pipeline.mjs.
+BROWSER = {
+    "font.detect": "web/src/font/pipeline.mjs detect(): find the letters on a scanned sheet",
+    "font.pack": "web/src/font/pipeline.mjs trace() and build(): outline the letters and pack the font",
+}
+
 UNIMPLEMENTED = {
     "image.gen": "diffusers + sdxl-turbo",
     "control.depth": "a depth estimator",
@@ -92,6 +100,11 @@ def run(plan: dict, outdir: pathlib.Path, simulate: bool = False) -> dict:
         op = step["op"]
         if op.startswith(ELEMENT):
             produced[step["id"]] = step["params"].get("asset") or f"text:{step['params'].get('text')}"
+        elif op in BROWSER:
+            raise WorkerRefused(
+                f"{step['id']} runs in the browser, not here: {BROWSER[op]}. a worker that "
+                f"simulated it would hand back a text file named like a font."
+            )
         elif op in UNIMPLEMENTED:
             if not simulate:
                 raise WorkerRefused(
