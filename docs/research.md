@@ -193,6 +193,49 @@ switch, so nothing changed there. fuser's prompt-first hero was not taken either
 brief starts from a board rather than a sentence, and a prompt bar over a canvas is the one thing a
 preset card already does better on a spatial layer.
 
+## fuser's docs, with the screenshots actually looked at
+
+docs.fuser.studio has real canvas screenshots, and they say more than the prose does. read from
+`/docs/interface/sockets` and `/docs/interface/flows`, seen rather than described:
+
+* **a node is a card with property rows, not a box with ports.** header (icon, title, collapse),
+  then the prompt as a text area inside the card, then one labelled row per property (`Images`,
+  `Aspect Ratio` with a dropdown), each with its **own socket on the card edge**, then a fold:
+  "2 properties hidden" / "5 properties hidden". complexity is folded, not removed.
+* **the result is the node body.** the generated image sits inside the card under the properties.
+  there is no separate "preview" panel; the node is the output.
+* **size follows importance.** in the building-flows hero a text node feeds three small flux nodes
+  and the final image is a node several times larger. intermediates stay small, the answer is big.
+* **the socket vocabulary is shape plus colour.** colour is the dtype (text, image, video, audio,
+  3d, style, number, generic). shape is cardinality: a **circle** takes one connection, an
+  **oval** takes many. a **triangle** is a passthrough that shares a value (prompt, style, seed)
+  with a downstream node, and a **line plus triangle** is a passthrough that fans out.
+* **chrome is minimal and floats.** a small project pill top left, zoom and Share top right, and a
+  **bottom toolbar of node-type buttons with a `+`**. nothing docks.
+* **the canvas is dark even though the docs site is pale.** the docs page is a light theme with a
+  sun/moon toggle, and every canvas screenshot inside it is near-black with a faint dot grid.
+
+what the owner decided from this: **flowby is dark mode only.** no light theme, no toggle, no
+`prefers-color-scheme`. fuser's marketing and docs surfaces are pale; the canvas inside them is not,
+and the canvas is the product. borrow the structure, not the palette.
+
+### the gap this leaves in this tree
+
+| fuser, seen | flowby today | state |
+| --- | --- | --- |
+| a socket per property row | one port per wire | missing |
+| result embedded as the node body | text-only card | missing |
+| "N properties hidden" fold | all or nothing | missing |
+| passthrough triangle | none | missing |
+| circle vs oval cardinality | one shape | missing |
+| size follows importance | every node the same width | missing |
+| bottom toolbar of node types | none | missing |
+| dark canvas with dot grid | dark, with dot grid | **done** |
+
+what was *not* seen: the vectary canvas launch video (youtube.com/watch?v=5KhZKzW67PU, 1:46). the
+page loads and the thumbnail is visible, but playback did not start in the browser session and the
+embed player refused with error 153. the vectary pages above are still read as text, not watched.
+
 ## base44 studio: the third idiom, /tools
 
 studio.base44.com is base44's own alpha and the closest thing to the third instinct: bring a

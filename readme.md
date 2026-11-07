@@ -197,6 +197,7 @@ those numbers are fields on the route, not prose, which is the point: `routes.fi
 | the node canvas: palette, wires, layout, refusals | verified | `node --test web/tests/graph.test.mjs` |
 | the node canvas actually drawing | verified | headless chrome: 7 nodes, 5 wires, 12 handles |
 | the motion spec, including reduced motion | verified | `node --test web/tests/anim.test.mjs` |
+| dark mode only, with no light theme to drift into | verified | `node --test web/tests/dark.test.mjs` |
 | the spatial canvas being shippable | **licence** | tldraw is source-available, not open source; decision 11 |
 | the react binding | designed | no `node_modules` in this checkout |
 | fastapi, celery, browserbase | designed | imports guarded, `python3 -m app.main` says so |

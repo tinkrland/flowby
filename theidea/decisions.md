@@ -156,7 +156,22 @@ the slim entry (`m` + `LazyMotion` + `domAnimation`, `strict`) brings it to 480 
 engine then loads after first paint. the remaining ~90 kB buys every animation in the product, which
 is the right trade for a canvas that is the product; it would not be for a marketing page.
 
-## 13. what is not decided here
+## 13. flowby is dark mode only
+
+decided by the owner. there is no light theme, no toggle and no `prefers-color-scheme` branch.
+fuser's own marketing and docs surfaces are pale, with a sun/moon switch, but every canvas
+screenshot inside those docs is near-black with a dot grid, and the canvas is the product. so the
+structure is borrowed and the palette is not.
+
+it is enforced rather than remembered: `index.html` declares `color-scheme: dark`, the canvas sets
+`colorMode="dark"` (react flow ships a light default, so leaving it unset would be a light theme by
+omission), and `web/tests/dark.test.mjs` fails on a light `colorMode`, a `prefers-color-scheme:
+light` block, a theme toggle, or a background that is not near black.
+
+what this saves: one set of colours to design and contrast-check instead of two, and the wire
+palette (amber, green, blue, red) only has to read against a single background.
+
+## 14. what is not decided here
 
 the licence. whether boards are multiplayer. whether a preset can be authored by a user inside the product, which both products in `docs/research.md` are moving toward and which is a different product surface than shipping six of them.
 

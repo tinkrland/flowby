@@ -233,6 +233,7 @@ export function NodeCanvas({ pipeline, onCameraChange }: NodeCanvasProps) {
   return (
     <LazyMotion features={domAnimation} strict>
       <ReactFlow
+        colorMode="dark"
         nodes={flow.nodes}
         edges={flow.edges}
         nodeTypes={nodeTypes}

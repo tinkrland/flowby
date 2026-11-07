@@ -39,6 +39,7 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     tests/align.test.mjs        the maths, run under node
     tests/graph.test.mjs        the seam: palette drift, dangling wires, layout, overlaps
     tests/anim.test.mjs         the spec, including that reduced motion means none
+    tests/dark.test.mjs         dark only: no light theme, no toggle, near-black page
   tests/selftest.py             the suite: stdlib only, no network, no gpu
   docs/
     presets.md                  how a preset is written, and what a good one has to say
