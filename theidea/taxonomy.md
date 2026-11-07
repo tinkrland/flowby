@@ -357,3 +357,55 @@ so nothing about studio's style transfer flow is known beyond what the owner has
 remaining routes are the owner signing in through the live browser view, or the owner describing or
 screenshotting the flow. nothing in this tree should claim to match studio until one of those
 happens.
+
+## the style kind, built (2026-11-07)
+
+the owner said two things that cut the earlier discussion short, and they are recorded as given:
+
+* **training goes through the browserbase / kernel.sh route on the user's colab**, which the tree
+  already had as `colab-browserbase` in `routes.py`, with its gates, its ceiling and its `contested`
+  policy. this was said before and was re-argued here by mistake. it is the route, not a question.
+* **style transfer with lora training "isn't very complicated"**, and base44's version of it "isn't a
+  brand new thing". so the style kind is built as small as the illustrace prose makes it, not as the
+  larger node proposed a few sections up.
+
+what was built is `src/flowby/styles.py` and 52 tests, and nothing in it is new research. every
+number is illustrace's, and the file says so where it uses one.
+
+| piece | what it is | where it comes from |
+| --- | --- | --- |
+| `Style` | a trigger, a base, a corpus, a default weight and a state | illustrace's inspo contract |
+| `gate()` | seven refusals before any gpu minute: rare trigger, trigger that names the look, 10+ images, no subject over 40%, one technique, captions that say the medium or the light, weight 0.3 to 0.7 | `DATASET_PACKAGING.md`, `MICRO_LORA_PROBES.md` |
+| lifecycle | corpus, gated, training, validating, ready (or refused, failed), final once ready | new, from "a retrain is a new style" |
+| `training_plan()` | a flat plan with the t4 flags, the resume seam and the credentials named as gates | `colab_micro_lora.py` |
+| `check_stack()` | max 3 styles, each 0.3 to 0.7, sum at most 1.2 per region, one base, a mask for any regional use | `STYLE_LORA_ENGINE.md`, `RASTER_ASSESSMENT_CONTRACT.md` |
+| `rank_weights()` | strength and gravity as two axes, 0.65 decay per rank | the composer's gravity view |
+| `validate_probe()` | fidelity under 10 delta-e and no leakage past the base floor, refused without a floor | `adapter_probe.py` |
+
+three things the tests caught that reading the prose did not:
+
+* **the gate missed illustrace's own example.** `mntwash` passed, because "wash" was in the
+  ordinary-word list and not the style-word list. the check now looks across both as a substring.
+* **a refusal that names every image is not a refusal anyone reads.** one bad corpus produced 29
+  lines. it now groups per kind of problem with a count and three examples: 7 lines.
+* **two statements about the same disk contradicted each other.** the route said weights would be
+  fetched again, the plan said they were cached on the user's drive. the route's caveat now defers to
+  the plan.
+
+### not built, and not claimed
+
+* **nothing has trained.** `training_plan` produces the job and the route accepts it. no browser has
+  been opened, no colab driven, no adapter produced. the same is true of illustrace, and this tree
+  inherits that: the recipe is debugged on paper and by that repo's failures, not by a finished run.
+* **the probe is arithmetic over numbers handed to it.** `validate_probe` judges a measurement; it
+  does not take one. the measuring (cie lab palette distance against the training profile) lives in
+  illustrace's `engine/adapter_probe.py` and has not been ported.
+* **no preset applies a style yet.** `check_stack` and `rank_weights` say whether a combination is
+  allowed and how to weigh it. wiring a `style.apply` step into a preset, and a mask input on the
+  wire, is the next piece.
+* **the captioner is not here.** illustrace captions with a vision model (minicpm-v or a gpt model)
+  and keeps the style unspoken. `check_captions` only refuses bad captions; it does not write good
+  ones.
+* **flux dev versus schnell is unsettled.** both are in `BASES` with their licences. dev is better
+  and cannot be sold; schnell can, and fluxgym's readme says it trained poorly. no run has compared
+  them.

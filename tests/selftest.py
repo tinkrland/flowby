@@ -26,7 +26,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from flowby import compile as compiler  # noqa: E402
-from flowby import catalogue, dtypes, modes, presets, routes  # noqa: E402
+from flowby import catalogue, dtypes, modes, presets, routes, styles  # noqa: E402
 from flowby import hub as hubmod  # noqa: E402
 from flowby import job as jobs  # noqa: E402
 from flowby.graph import Graph, GraphRefused, Node, Port  # noqa: E402
@@ -1309,6 +1309,341 @@ def main() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     return 0 if result.wasSuccessful() else 1
+
+
+def corpus(n=12, trigger="mzqtlv", subject_cycle=("a harbour", "a bridge", "a garden", "a market"),
+           technique=""):
+    """a corpus that passes, so each test can break exactly one thing about it."""
+    return tuple(
+        styles.Item(
+            name=f"img_{i:02d}.png",
+            caption=f"{trigger}, a view of {subject_cycle[i % len(subject_cycle)]} number {i}",
+            subject=subject_cycle[i % len(subject_cycle)],
+            technique=technique,
+        )
+        for i in range(n)
+    )
+
+
+def a_style(**over):
+    base = dict(id="s1", label="harbour wash", trigger="mzqtlv", base="flux-dev", items=corpus())
+    base.update(over)
+    return styles.Style(**base)
+
+
+class StyleGate(unittest.TestCase):
+    """the rules illustrace paid gpu hours to learn, held as refusals before any gpu is used."""
+
+    def test_a_clean_corpus_passes(self):
+        self.assertEqual(styles.gate(a_style()), [])
+
+    def test_a_trigger_that_spells_the_look_is_refused(self):
+        # illustrace's own first draft. the critique pass caught that it contained the claim.
+        reasons = styles.check_trigger("mntwash")
+        self.assertTrue(any("wash" in r for r in reasons), reasons)
+
+    def test_an_ordinary_word_is_refused_as_a_trigger(self):
+        self.assertTrue(styles.check_trigger("watercolor") or styles.check_trigger("vintage"))
+        self.assertTrue(any("ordinary word" in r for r in styles.check_trigger("vintage")))
+
+    def test_a_trigger_must_be_a_rare_lowercase_token(self):
+        for bad in ("Style1", "ab", "x" * 20, "has space", "dash-ed"):
+            self.assertTrue(styles.check_trigger(bad), bad)
+
+    def test_a_caption_that_names_the_medium_is_refused(self):
+        items = list(corpus())
+        items[3] = styles.Item("img_03.png", "mzqtlv, a watercolor harbour", "a harbour")
+        reasons = styles.check_captions("mzqtlv", tuple(items))
+        self.assertEqual(len(reasons), 1)
+        self.assertIn("img_03.png", reasons[0])
+        self.assertIn("watercolor", reasons[0])
+
+    def test_light_words_belong_to_the_trigger_not_the_caption(self):
+        # illustrace: "sunset stays because it's subject" was circular. sunset IS the palette.
+        items = list(corpus())
+        items[0] = styles.Item("img_00.png", "mzqtlv, a harbour at sunset", "a harbour")
+        reasons = styles.check_captions("mzqtlv", tuple(items))
+        self.assertTrue(any("sunset" in r and "palette" in r for r in reasons), reasons)
+
+    def test_a_caption_without_the_trigger_is_refused(self):
+        items = list(corpus())
+        items[5] = styles.Item("img_05.png", "a harbour with boats", "a harbour")
+        reasons = styles.check_captions("mzqtlv", tuple(items))
+        self.assertEqual(len(reasons), 1, reasons)
+        self.assertIn("1 caption does not start with the trigger", reasons[0])
+        self.assertIn("img_05.png", reasons[0])
+
+    def test_too_few_images_is_refused(self):
+        reasons = styles.check_corpus(corpus(n=6))
+        self.assertTrue(any("below 10" in r for r in reasons), reasons)
+
+    def test_one_subject_over_forty_percent_is_refused(self):
+        # the water-lilies case: a convenience sample that is half one subject teaches the subject.
+        items = corpus(n=12, subject_cycle=("water lilies",) * 7 + ("a bridge", "a harbour"))
+        reasons = styles.check_corpus(items)
+        self.assertTrue(any("absorb" in r and "water lilies" in r for r in reasons), reasons)
+
+    def test_a_balanced_corpus_is_not_refused_for_subject(self):
+        self.assertFalse(any("absorb" in r for r in styles.check_corpus(corpus())))
+
+    def test_two_techniques_in_one_corpus_are_refused(self):
+        items = tuple(
+            styles.Item(f"i{k}.png", f"mzqtlv, scene {k}", f"s{k % 5}", "loose" if k % 2 else "fine")
+            for k in range(12)
+        )
+        self.assertTrue(any("two hands" in r for r in styles.check_corpus(items)))
+
+    def test_duplicate_images_are_refused(self):
+        items = list(corpus())
+        items.append(items[0])
+        self.assertTrue(any("appears 2 times" in r for r in styles.check_corpus(tuple(items))))
+
+    def test_a_weight_outside_the_working_range_is_refused(self):
+        self.assertTrue(any("outside" in r for r in styles.gate(a_style(weight=0.95))))
+        self.assertTrue(any("outside" in r for r in styles.gate(a_style(weight=0.1))))
+
+    def test_a_repeated_caption_mistake_reads_as_one_line_with_a_count(self):
+        # 29 lines for one bad corpus was unreadable: the same complaint once per image.
+        items = tuple(styles.Item(f"p{i}.png", f"mzqtlv, a watercolor harbour {i}", "a harbour")
+                      for i in range(9))
+        reasons = styles.check_captions("mzqtlv", items)
+        self.assertEqual(len(reasons), 1, reasons)
+        self.assertIn("9 captions say 'watercolor'", reasons[0])
+        self.assertIn("and 6 more", reasons[0])
+
+    def test_a_bad_corpus_refusal_stays_short_enough_to_read(self):
+        bad = a_style(trigger="watercolor", items=tuple(
+            styles.Item(f"p{i}.png", f"a watercolor painting at sunset {i}", "lilies",
+                        "loose" if i % 2 else "fine") for i in range(7)))
+        styles.submit(bad)
+        self.assertLessEqual(len(bad.reason.split("; ")), 9)
+
+    def test_an_unknown_base_is_refused(self):
+        self.assertTrue(any("not a base" in r for r in styles.gate(a_style(base="sdxl-turbo"))))
+
+    def test_submitting_a_bad_corpus_records_the_refusal_instead_of_raising(self):
+        bad = a_style(items=corpus(n=4))
+        styles.submit(bad)
+        self.assertEqual(bad.state, "refused")
+        self.assertIn("below 10", bad.reason)
+        self.assertEqual(bad.history[-1]["to"], "refused")
+
+    def test_submitting_a_good_corpus_moves_it_to_gated(self):
+        good = a_style()
+        styles.submit(good)
+        self.assertEqual(good.state, "gated")
+
+
+class StyleLifecycle(unittest.TestCase):
+    def test_a_ready_style_is_final(self):
+        s = a_style()
+        for state in ("gated", "training", "validating", "ready"):
+            styles.advance(s, state)
+        for state in ("training", "gated", "corpus"):
+            with self.assertRaises(styles.StyleRefused):
+                styles.advance(s, state)
+
+    def test_a_style_cannot_skip_the_gate(self):
+        with self.assertRaises(styles.StyleRefused) as cm:
+            styles.advance(a_style(), "training")
+        self.assertIn("cannot become training", str(cm.exception))
+
+    def test_a_refused_style_cannot_be_trained(self):
+        s = a_style(items=corpus(n=3))
+        styles.submit(s)
+        with self.assertRaises(styles.StyleRefused) as cm:
+            styles.training_plan(s)
+        self.assertIn("refused", str(cm.exception))
+
+    def test_the_history_records_every_move(self):
+        s = a_style()
+        styles.submit(s, clock=lambda: 1.0)
+        styles.advance(s, "training", clock=lambda: 2.0)
+        self.assertEqual([h["to"] for h in s.history], ["gated", "training"])
+
+
+class StyleTraining(unittest.TestCase):
+    def gated(self, **over):
+        s = a_style(**over)
+        styles.submit(s)
+        return s
+
+    def test_the_plan_is_a_flat_plan_the_route_can_judge(self):
+        plan = styles.training_plan(self.gated())
+        self.assertEqual(plan["route"], "colab-browserbase")
+        self.assertTrue(plan["env"]["gpu"])
+        # the same function every other job is judged by, with no special case for styles.
+        self.assertEqual(routes.fit(routes.get("colab-browserbase"), plan), [])
+
+    def test_the_steps_are_images_times_repeats_times_epochs(self):
+        # illustrace: 15 images x 3 repeats x 10 epochs = 450 steps.
+        self.assertEqual(styles.steps_for(15), 450)
+        self.assertEqual(styles.training_plan(self.gated())["steps"][0]["params"]["total_steps"], 12 * 3 * 10)
+
+    def test_the_estimate_matches_illustraces_measured_range(self):
+        low, high = styles.estimate_minutes(15)  # 450 steps at 10 to 20 seconds
+        self.assertAlmostEqual(low / 60, 1.25, places=2)
+        self.assertAlmostEqual(high / 60, 2.5, places=2)
+
+    def test_the_t4_flags_that_stopped_the_silent_oom_are_in_the_plan(self):
+        flags = " ".join(styles.training_plan(self.gated())["steps"][0]["params"]["flags"])
+        for flag in ("--lowram", "--blocks_to_swap 8", "--fp8_base", "fp16"):
+            self.assertIn(flag, flags)
+        self.assertNotIn("bf16", flags)  # a t4 has no bf16, and fluxgym hard-codes it
+
+    def test_resume_is_part_of_the_plan(self):
+        plan = styles.training_plan(self.gated())
+        self.assertEqual(plan["resume"]["save_every_epochs"], 2)
+        self.assertTrue(plan["resume"]["weights_cached_on_drive"])
+
+    def test_the_credentials_are_named_as_gates_and_never_read(self):
+        plan = styles.training_plan(self.gated())
+        self.assertIn("GOOGLE_SESSION_COOKIES", plan["env"]["gates"])
+        self.assertIn("HF_TOKEN", plan["env"]["gates"])  # flux-dev is a gated download
+        self.assertNotIn("hf_", json.dumps(plan))
+        # and a route that is missing them refuses, before a browser is opened.
+        refusal = routes.fit(routes.get("colab-browserbase"), plan, present=set())
+        self.assertTrue(any("GOOGLE_SESSION_COOKIES" in r for r in refusal))
+
+    def test_a_non_commercial_base_says_so_in_the_plan(self):
+        plan = styles.training_plan(self.gated(base="flux-dev"))
+        self.assertFalse(plan["commercial"])
+        self.assertTrue(any("cannot be sold" in c for c in plan["caveats"]))
+
+    def test_schnell_needs_no_token_and_is_commercial(self):
+        plan = styles.training_plan(self.gated(base="flux-schnell"))
+        self.assertTrue(plan["commercial"])
+        self.assertNotIn("HF_TOKEN", plan["env"]["gates"])
+
+    def test_a_corpus_too_long_for_the_ceiling_is_refused_by_the_route(self):
+        big = a_style(items=corpus(n=2000))
+        styles.submit(big)
+        # 2000 images is 60000 steps. it is gated (the corpus rules pass) but the route says no.
+        plan = styles.training_plan(big)
+        self.assertTrue(any("caps at" in r for r in routes.fit(routes.get("colab-browserbase"), plan)))
+
+    def test_a_style_plan_does_not_claim_the_weights_are_refetched(self):
+        # the plan caches weights on the user's drive, so the generic ephemeral-disk caveat would
+        # contradict it. one of the two statements was wrong, and it was the caveat.
+        plan = styles.training_plan(self.gated())
+        notes = routes.caveats(routes.get("colab-browserbase"), plan)
+        self.assertFalse(any("fetched again" in n for n in notes), notes)
+
+    def test_a_plan_that_does_not_cache_still_gets_the_refetch_caveat(self):
+        plan = styles.training_plan(self.gated())
+        plan["resume"]["weights_cached_on_drive"] = False
+        self.assertTrue(any("fetched again" in n
+                            for n in routes.caveats(routes.get("colab-browserbase"), plan)))
+
+    def test_the_same_style_compiles_to_the_same_plan(self):
+        a, b = self.gated(), self.gated()
+        self.assertEqual(json.dumps(styles.training_plan(a), sort_keys=True),
+                         json.dumps(styles.training_plan(b), sort_keys=True))
+
+
+class StyleUse(unittest.TestCase):
+    def ready(self, ident, base="flux-dev", **over):
+        s = a_style(id=ident, label=ident, base=base, **over)
+        for state in ("gated", "training", "validating", "ready"):
+            styles.advance(s, state)
+        return s
+
+    def board(self, *ids, **kw):
+        return {i: self.ready(i, **kw) for i in ids}
+
+    def test_one_style_at_a_normal_weight_is_fine(self):
+        known = self.board("a")
+        self.assertEqual(styles.check_stack([styles.Use("a", 0.6)], known), [])
+
+    def test_a_style_that_is_not_ready_cannot_be_applied(self):
+        known = {"a": a_style(id="a")}
+        reasons = styles.check_stack([styles.Use("a", 0.6)], known)
+        self.assertTrue(any("only a ready style" in r for r in reasons))
+
+    def test_styles_from_different_bases_are_refused(self):
+        known = {"a": self.ready("a", "flux-dev"), "b": self.ready("b", "flux-schnell")}
+        reasons = styles.check_stack([styles.Use("a", 0.5), styles.Use("b", 0.5)], known)
+        self.assertTrue(any("different bases" in r for r in reasons))
+
+    def test_four_styles_are_past_the_interference_limit(self):
+        known = self.board("a", "b", "c", "d")
+        uses = [styles.Use(k, 0.3, "whole") for k in "abcd"]
+        self.assertTrue(any("past 3" in r for r in styles.check_stack(uses, known)))
+
+    def test_two_whole_frame_styles_that_sum_too_high_are_refused(self):
+        known = self.board("a", "b")
+        reasons = styles.check_stack([styles.Use("a", 0.7), styles.Use("b", 0.7)], known)
+        self.assertTrue(any("sum to 1.40" in r for r in reasons), reasons)
+
+    def test_the_same_two_styles_on_separate_regions_are_not_refused(self):
+        # the point of masking over stacking: 0.7 + 0.7 is fine when they never share a pixel.
+        known = self.board("a", "b")
+        uses = [styles.Use("a", 0.7, "subject"), styles.Use("b", 0.7, "background")]
+        self.assertEqual(styles.check_stack(uses, known, mask_origin="user"), [])
+
+    def test_a_regional_style_with_no_mask_is_refused(self):
+        known = self.board("a")
+        reasons = styles.check_stack([styles.Use("a", 0.5, "subject")], known)
+        self.assertTrue(any("needs a mask" in r for r in reasons))
+
+    def test_a_weight_outside_the_range_is_refused(self):
+        known = self.board("a")
+        self.assertTrue(styles.check_stack([styles.Use("a", 0.9)], known))
+
+    def test_a_guessed_mask_lowers_confidence_instead_of_passing_for_a_drawn_one(self):
+        self.assertEqual(styles.confidence("user"), "high")
+        self.assertEqual(styles.confidence("model"), "medium")
+        self.assertEqual(styles.confidence("heuristic"), "low")
+        self.assertEqual(styles.confidence("whole_frame"), "low")
+
+    def test_gravity_decays_the_lower_ranks(self):
+        # illustrace: strength is magnitude, gravity is who wins. decay is 0.65 per rank.
+        uses = [styles.Use("top", 0.6, priority=2), styles.Use("mid", 0.6, priority=1),
+                styles.Use("low", 0.6, priority=0)]
+        w = styles.rank_weights(uses)
+        self.assertEqual(w["top"], 0.6)
+        self.assertAlmostEqual(w["mid"], 0.39, places=2)
+        self.assertAlmostEqual(w["low"], 0.2535, places=3)
+
+    def test_gravity_beats_strength(self):
+        # the top-ranked style wins even at a lower percentage than the one under it.
+        uses = [styles.Use("top", 0.4, priority=1), styles.Use("under", 0.7, priority=0)]
+        w = styles.rank_weights(uses)
+        self.assertEqual(w["top"], 0.4)
+        self.assertLess(w["under"], 0.7)
+
+    def test_the_lowest_priority_paints_first(self):
+        order = styles.resolve_order([styles.Use("b", 0.5, priority=2), styles.Use("a", 0.5, priority=0)])
+        self.assertEqual([u.style for u in order], ["a", "b"])
+
+
+class StyleProbe(unittest.TestCase):
+    FLOOR = {"stroke": {"mean": 0.20, "sd": 0.05}, "texture": {"mean": 0.30, "sd": 0.04}}
+
+    def test_a_faithful_style_that_leaks_nothing_is_ready(self):
+        verdict = styles.validate_probe({"palette_de": 6.2, "unclaimed": {"stroke": 0.22}}, self.FLOOR)
+        self.assertTrue(verdict["ready"])
+        self.assertEqual(verdict["leaked"], [])
+
+    def test_fidelity_over_ten_delta_e_fails(self):
+        self.assertFalse(styles.validate_probe({"palette_de": 14.0, "unclaimed": {}}, self.FLOOR)["ready"])
+
+    def test_a_component_that_moved_past_the_floor_is_reported_as_leaked(self):
+        verdict = styles.validate_probe({"palette_de": 5.0, "unclaimed": {"stroke": 0.40}}, self.FLOOR)
+        self.assertEqual(verdict["leaked"], ["stroke"])
+        self.assertFalse(verdict["ready"])
+
+    def test_a_probe_without_a_floor_is_refused_because_a_pass_would_mean_nothing(self):
+        with self.assertRaises(styles.StyleRefused) as cm:
+            styles.validate_probe({"palette_de": 5.0, "unclaimed": {}}, {})
+        self.assertIn("floor", str(cm.exception))
+
+    def test_a_probe_with_no_palette_distance_is_refused(self):
+        with self.assertRaises(styles.StyleRefused):
+            styles.validate_probe({"unclaimed": {}}, self.FLOOR)
+
+    def test_the_noise_caveat_travels_with_the_verdict(self):
+        self.assertIn("noise", styles.validate_probe({"palette_de": 5.0}, self.FLOOR)["caveat"])
 
 
 if __name__ == "__main__":

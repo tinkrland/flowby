@@ -19,6 +19,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
                                 crossings between them, which the tests perform
     catalogue.py                the owner's 29 bullets as data, and what each one became
     routes.py                   where a job runs and what each place honestly cannot do
+    styles.py                   the one trained kind: a corpus gate, a lifecycle, a colab training plan,
+                                and the limits on stacking styles
     job.py                      a plan's life, its illegal moves, its artifacts, its watchdog
     hub.py                      the fan-out to every board that is open, with replay
     cli.py                      the terminal view of a board

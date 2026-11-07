@@ -147,7 +147,8 @@ def caveats(route: Route, plan: dict) -> list[str]:
     notes = []
     if route.policy != "fine":
         notes.append(f"policy: {route.policy}. {route.note}")
-    if route.ephemeral and plan.get("env", {}).get("models"):
+    cached = plan.get("resume", {}).get("weights_cached_on_drive")
+    if route.ephemeral and plan.get("env", {}).get("models") and not cached:
         notes.append(
             f"{', '.join(plan['env']['models'])} will be fetched again on {route.label}, "
             f"because its disk does not outlive the job"
