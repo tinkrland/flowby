@@ -1135,6 +1135,28 @@ class Alignment(unittest.TestCase):
 class Prose(unittest.TestCase):
     """the readme is checked against the registry, because drift is the one bug prose cannot catch."""
 
+    def test_each_doc_page_is_still_the_page_it_claims_to_be(self):
+        """a doc that silently becomes another doc is worse than a missing one.
+
+        docs/research.md was once overwritten with directory.md contents and nothing failed,
+        because every prose test only asked whether a word appeared somewhere in the tree. so:
+        each page states its own subject in the first line, and those are checked here.
+        """
+        expected = {
+            "docs/research.md": ("# research", ["vectary canvas", "fuser", "studio.base44.com"]),
+            "directory.md": ("# directory", ["src/flowby/", "tests/selftest.py"]),
+            "readme.md": ("# flowby", ["presets", "wires"]),
+            "docs/presets.md": ("#", ["preset"]),
+            "docs/compute.md": ("#", ["colab"]),
+            "docs/frontend.md": ("#", ["camera"]),
+        }
+        for path, (first_line, subjects) in expected.items():
+            page = (ROOT / path).read_text()
+            self.assertTrue(page.splitlines()[0].lower().startswith(first_line),
+                            f"{path} starts with {page.splitlines()[0]!r}")
+            for subject in subjects:
+                self.assertIn(subject, page.lower(), f"{path} does not mention {subject}")
+
     def test_the_readme_names_the_three_doors(self):
         readme = (ROOT / "readme.md").read_text().lower()
         for mode in modes.MODES:
