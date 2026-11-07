@@ -24,6 +24,7 @@ that projection is the whole architecture. it means there is one truth and no sy
 `bin/flowby` is the whole surface, and it is a shim over `python3 -m flowby.cli` so the modules are the thing you can read.
 
 ```
+bin/flowby modes                   the three doors in, and the crossing out of each
 bin/flowby presets                 the menu, with each preset's honest state
 bin/flowby legend                  the four wires, and the roles that ride them
 bin/flowby demo                    build a board, print both views and every wire
@@ -50,6 +51,20 @@ the modules are the ideas. `dtypes.py` is the four wires and the refusal to add 
 control channels (depth, mask, pose, palette, style) are **roles on green**, not a fifth and sixth colour. a depth map and a portrait are both images, and an eye that has to learn six colours stops using colour at all.
 
 the other half of the palette is the refusal: **nothing coerces**. an image does not become a mesh by being plugged into a mesh port. it becomes a mesh by passing through a node that says so, which is why `animate-composition` contains a `render.frames` node with a red input and a blue output. a conversion you can see is a conversion you can undo.
+
+## three doors into one graph
+
+the three products this sits between each open on a different first move, and that is not three products to flowby:
+
+* **freeform** (fuser's instinct): you type, and the typing is a node. `bin/flowby demo` starts this way, an amber text element wired into a model.
+* **fixed** (vectary's instinct): you press a card, and the card is a subgraph you can open.
+* **style** (base44 studio's instinct): you bring a reference, and then carry it across more than one frame.
+
+`bin/flowby modes` prints all three, and the claim it exists to defend is the last line: **every door reaches every other**. freeform stops being freeform the moment you apply a preset, and the words you typed are still a node you can rewire rather than a setting you have lost. a fixed preset is left for the graph underneath the first time you point a frame at an intermediate node. a carried style is still a node, so it can be narrowed to one frame or taken apart.
+
+those crossings are not promises in prose. `tests/selftest.py` performs each one on a real board, because a mode you cannot leave is a product and not a mode.
+
+one honest gap: the style door is modelled from a description of base44's studio, not from the product. my browser has no session there, so `docs/research.md` records it as described rather than inspected.
 
 ## the presets
 

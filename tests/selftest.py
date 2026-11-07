@@ -25,7 +25,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from flowby import compile as compiler  # noqa: E402
-from flowby import dtypes, presets, routes  # noqa: E402
+from flowby import dtypes, modes, presets, routes  # noqa: E402
 from flowby import hub as hubmod  # noqa: E402
 from flowby import job as jobs  # noqa: E402
 from flowby.graph import Graph, GraphRefused, Node, Port  # noqa: E402
@@ -460,6 +460,81 @@ class Board(unittest.TestCase):
         for node in view["nodes"]:
             self.assertIn("x", node["pos"])
             self.assertIn("y", node["pos"])
+
+
+class Doors(unittest.TestCase):
+    """the three ways in are only worth calling modes if you can walk between them.
+
+    every crossing below is performed rather than asserted from a docstring, because the docstring
+    was the thing most likely to be optimistic.
+    """
+
+    def test_freeform_typing_becomes_a_node_and_stays_one(self):
+        scene = Scene()
+        words = scene.add("text", "brief", text="a cracked celadon vase, three quarter light")
+        instance = scene.apply(words.id, "text-to-image")
+        composed = [s for s in compiler.plan(scene)["steps"]
+                    if s["op"] == "text.compose"][0]
+        self.assertIn(f"{words.id}:media", composed["inputs"]["draft"])
+        self.assertEqual(scene.graph.nodes[words.id].params["text"],
+                         "a cracked celadon vase, three quarter light",
+                         "the words are a parameter of a node, not a setting of the app")
+        self.assertEqual(instance.preset, "text-to-image")
+
+    def test_a_preset_can_be_left_for_the_graph_underneath_it(self):
+        scene = Scene()
+        plate = scene.add("sketch", "line sketch", asset=ASSET)
+        instance = scene.apply(plate.id, "sketch-to-mesh")
+        self.assertEqual(scene.rendered_dtype(plate.id), "mesh")
+        scene.show(plate.id, instance.nodes[0])
+        self.assertEqual(scene.rendered_dtype(plate.id), "image",
+                         "the frame can be pointed at an intermediate node, which is the way out "
+                         "of the fixed door")
+
+    def test_a_board_style_can_be_narrowed_to_one_frame_or_one_head(self):
+        scene = Scene()
+        frames = [scene.add("image", f"plate {i}", asset=ASSET) for i in (1, 2, 3)]
+        shared = scene.apply_shared(frames[0].id, [f.id for f in frames], "studio-light")
+        scene.show(frames[1].id, f"{shared.id}/study")
+        self.assertEqual(scene.rendered_dtype(frames[1].id), "image")
+        self.assertEqual(scene.board()[1]["presets"], ["studio-light"],
+                         "showing the shared palette does not unapply the preset")
+
+    def test_a_style_preset_says_what_it_is_missing_before_it_runs(self):
+        scene = Scene()
+        plate = scene.add("image", "plate", asset=ASSET)
+        instance = scene.apply(plate.id, "style-transfer")
+        with self.assertRaises(compiler.CompileRefused) as caught:
+            compiler.plan(scene)
+        self.assertIn("reference", str(caught.exception))
+        look = scene.add("image", "the look", asset=ASSET)
+        scene.link(instance.id, "the look", look.id)
+        compiled = compiler.plan(scene)
+        self.assertEqual(len(compiled["artifacts"]), 2,
+                         "the restyled plate and the reference frame, which keeps its own media")
+        paint = [s for s in compiled["steps"] if s["op"] == "image.stylize"][0]
+        self.assertIn(f"{plate.id}:media", paint["inputs"]["content"])
+        read = [s for s in compiled["steps"] if s["op"] == "style.read"][0]
+        self.assertIn(f"{look.id}:media", read["inputs"]["reference"],
+                      "the reference is a second wire, not a setting on the same one")
+        self.assertTrue(paint["inputs"]["reference"].endswith("/read:out"))
+        self.assertIn("style-transfer/paint", scene.board()[0]["display"])
+
+    def test_every_door_reaches_every_other_door(self):
+        legend = modes.legend()
+        self.assertTrue(legend["reachable"])
+        for name, targets in legend["crossings"].items():
+            self.assertEqual(sorted(targets), sorted(set(modes.MODES) - {name}),
+                             f"{name} does not advertise a way out to every other door")
+
+    def test_every_preset_opens_on_exactly_one_door(self):
+        by_door = modes.legend()["presets_by_door"]
+        seen = [name for names in by_door.values() for name in names]
+        self.assertEqual(sorted(seen), sorted(presets.PRESETS),
+                         "a preset on two doors is a preset whose card is in two places")
+        self.assertIn("text-to-image", by_door["freeform"])
+        self.assertIn("style-transfer", by_door["style"])
+        self.assertIn("studio-light", by_door["style"])
 
 
 class BoardScope(unittest.TestCase):
@@ -1059,6 +1134,12 @@ class Alignment(unittest.TestCase):
 
 class Prose(unittest.TestCase):
     """the readme is checked against the registry, because drift is the one bug prose cannot catch."""
+
+    def test_the_readme_names_the_three_doors(self):
+        readme = (ROOT / "readme.md").read_text().lower()
+        for mode in modes.MODES:
+            self.assertIn(mode, readme, f"the readme does not mention the {mode} door")
+        self.assertIn("every door reaches every other", readme)
 
     def test_the_readme_names_every_preset(self):
         text = (ROOT / "readme.md").read_text()

@@ -15,6 +15,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     presets.py                  the subgraphs a slider stands in for, plus slots and estimates
     scene.py                    elements as nodes with a position, the chain, and recipes
     compile.py                  the plan a shell script can run, flattened once
+    modes.py                    the three doors in (freeform, fixed, style) and the
+                                crossings between them, which the tests perform
     routes.py                   where a job runs and what each place honestly cannot do
     job.py                      a plan's life, its illegal moves, its artifacts, its watchdog
     hub.py                      the fan-out to every board that is open, with replay
@@ -43,6 +45,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     2026-11-07-what-the-videos-showed.md
                                 the visual pass, and the fan-out it turned up
     2026-11-07-scope.md         the benefits table with one row missing, and board presets
+    2026-11-07-three-doors.md   freeform, fixed and style, and why a door you cannot
+                                leave is a product and not a mode
     2026-11-07-the-models-were-the-point.md
                                 crease is a diffusion pass, and the absence of a model
                                 became a test

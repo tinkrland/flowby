@@ -6,6 +6,7 @@ memory by `demo`, because persistence belongs to the app layer and this file is 
 
     flowby presets                    the menu, with each preset's honest state
     flowby legend                     the four wires
+    flowby modes                      freeform, fixed and style, and the crossings
     flowby demo                       build a board, show both views
     flowby sidebar <element>          what clicking that element opens
     flowby plan --preset sketch-to-mesh --set detail=90000
@@ -21,6 +22,7 @@ import os
 import sys
 
 from . import compile as compiler
+from . import modes
 from . import dtypes, presets, routes
 from .scene import Scene, SceneRefused, Transform
 
@@ -42,6 +44,26 @@ def _say(text: str, as_json: bool, payload=None) -> None:
         print(json.dumps(payload if payload is not None else text, indent=2, default=str))
     else:
         print(text)
+
+
+def cmd_modes(args) -> int:
+    legend = modes.legend()
+    if args.json:
+        print(json.dumps(legend, indent=2))
+        return 0
+    for mode in legend["modes"]:
+        print(f"{mode['name']}: {mode['label']}")
+        print(f"  first move   {mode['first_move']}")
+        print(f"  opens        {mode['opens']}")
+        print(f"  leaves for   {', '.join(mode['crosses_to'])}")
+        print(f"  crossing     {mode['crossing']}")
+        print(f"  before press {mode['cost_before_press']}")
+        print()
+    print("presets by door:")
+    for door, names in legend["presets_by_door"].items():
+        print(f"  {door:9} {', '.join(names) or 'none yet'}")
+    print(f"\nevery door reaches every other: {legend['reachable']}")
+    return 0
 
 
 def cmd_presets(args) -> int:
@@ -254,6 +276,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     subs.add_parser("presets", help="the preset menu").set_defaults(func=cmd_presets)
     subs.add_parser("legend", help="the four wires").set_defaults(func=cmd_legend)
+    mods = subs.add_parser("modes", help="the three doors into the graph")
+    mods.add_argument("--json", action="store_true")
+    mods.set_defaults(func=cmd_modes)
     subs.add_parser("demo", help="build the demo board and show both views").set_defaults(func=cmd_demo)
 
     sidebar = subs.add_parser("sidebar", help="the contextual panel for one element")
