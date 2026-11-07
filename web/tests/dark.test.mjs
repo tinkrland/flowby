@@ -17,7 +17,7 @@ const read = (rel) => fs.readFileSync(path.join(here, "..", rel), "utf8");
 
 const html = read("index.html");
 const canvas = read("src/NodeCanvas.tsx");
-const sources = ["src/NodeCanvas.tsx", "src/main.tsx", "index.html"].map(read).join("\n");
+const sources = ["src/NodeCanvas.tsx", "src/main.tsx", "src/Panel.tsx", "index.html"].map(read).join("\n");
 
 test("the document declares itself dark to the browser", () => {
   assert.match(html, /<meta name="color-scheme" content="dark"/);
@@ -39,4 +39,23 @@ test("the page background is near black, so the dot grid reads", () => {
   assert.ok(match, "the page declares a background");
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(match[1].slice(i, i + 2), 16));
   assert.ok((r + g + b) / 3 < 24, `background #${match[1]} is not dark enough`);
+});
+
+test("the panel is dark too: every colour it uses is dark or an accent, and none is a light surface", () => {
+  const panelSrc = read("src/Panel.tsx");
+  const colours = [...panelSrc.matchAll(/#([0-9a-fA-F]{6})\b/g)].map((m) => m[1].toLowerCase());
+  assert.ok(colours.length > 5, "the panel declares its palette");
+  const luminance = (hex) => {
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  // a surface (background, card, line) must be dark. text and accents are allowed to be light.
+  const surfaces = [...panelSrc.matchAll(/(?:bg|card|line):\s*"#([0-9a-fA-F]{6})"/g)].map((m) => m[1]);
+  assert.ok(surfaces.length >= 3, "found the surface colours");
+  for (const hex of surfaces) assert.ok(luminance(hex) < 0.12, `#${hex} is too light for a surface`);
+});
+
+test("the panel takes no theme prop and reads no system preference", () => {
+  const panelSrc = read("src/Panel.tsx");
+  assert.equal(/\btheme\b|matchMedia|prefers-color-scheme/.test(panelSrc.replace(/\/\*[\s\S]*?\*\//g, "")), false);
 });

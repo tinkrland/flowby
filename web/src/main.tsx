@@ -12,6 +12,7 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { NodeCanvas } from "./NodeCanvas";
+import { Panel, type PlacedElement } from "./Panel";
 
 type GraphDocument = {
   title: string;
@@ -20,6 +21,8 @@ type GraphDocument = {
 
 function App() {
   const [doc, setDoc] = useState<GraphDocument | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [placed, setPlaced] = useState<PlacedElement[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,10 +52,25 @@ function App() {
         <strong>{doc.title}</strong>
         <span style={{ color: "#71717a", fontSize: 12 }}>
           {doc.pipeline.nodes.length} nodes, {doc.pipeline.wires.length} wires
+          {placed.length > 0 && `, ${placed.length} placed from the panel`}
         </span>
+        <button
+          onClick={() => setPanelOpen((open) => !open)}
+          style={{ marginLeft: "auto", background: "#27272a", color: "#e4e4e7", border: 0, borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+        >
+          new node
+        </button>
       </header>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <NodeCanvas pipeline={doc.pipeline} />
+        {panelOpen && (
+          <div style={{ position: "absolute", top: 12, right: 12, bottom: 12, zIndex: 10, display: "flex" }}>
+            <Panel
+              onPlace={(elements) => setPlaced((all) => [...all, ...elements])}
+              onClose={() => setPanelOpen(false)}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

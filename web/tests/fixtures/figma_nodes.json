@@ -1,0 +1,22 @@
+{
+  "name": "Brand sheets",
+  "lastModified": "2026-10-30T09:12:00Z",
+  "nodes": {
+    "1:2": {
+      "document": {
+        "id": "0:1", "name": "Page 1", "type": "CANVAS",
+        "children": [
+          { "id": "1:2", "name": "Cover", "type": "FRAME", "absoluteBoundingBox": { "x": 0, "y": 0, "width": 1440, "height": 900 },
+            "children": [ { "id": "1:9", "name": "inner frame", "type": "FRAME", "absoluteBoundingBox": { "width": 100, "height": 100 } } ] },
+          { "id": "1:3", "name": "Alphabet sheet", "type": "FRAME", "absoluteBoundingBox": { "x": 1500, "y": 0, "width": 2000, "height": 640 } },
+          { "id": "1:4", "name": "Logo", "type": "COMPONENT", "absoluteBoundingBox": { "width": 200, "height": 200 } },
+          { "id": "1:5", "name": "a note", "type": "TEXT" },
+          { "id": "2:1", "name": "Moodboard", "type": "SECTION",
+            "children": [ { "id": "2:2", "name": "Ref A", "type": "FRAME", "absoluteBoundingBox": { "width": 800, "height": 600 } },
+                          { "id": "2:3", "name": "Ref B", "type": "FRAME", "absoluteBoundingBox": { "width": 800, "height": 600 } } ] }
+        ]
+      }
+    },
+    "9:9": null
+  }
+}
