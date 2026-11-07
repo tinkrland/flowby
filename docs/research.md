@@ -264,6 +264,15 @@ browser session, so this is the same product from the source instead. seen, not 
 not recovered: the studio base44 style transfer flow. `studio.base44.com` redirects to an sso login
 that renders blank without a signed-in session, and there is no credential in this environment.
 
+## illustrace: the owner's earlier style research, read
+
+`github.com/tinkrland/illustrace` (public, 94 commits, 521 files) is a benchmark for measuring and
+moving visual style one factor at a time. its learned half, the style lora engine, the colab micro
+lora script, the gpu runner and the react flow composer, is what flowby's **style** kind needs. it is
+summarised, with what carries over and what does not, in `theidea/taxonomy.md` under "what illustrace
+already knows about styles". the one-line version: it has a debugged colab recipe, a resume path and
+a probe, and it has **never finished a training run** by its own account.
+
 ## base44 studio: the third idiom, /tools
 
 studio.base44.com is base44's own alpha and the closest thing to the third instinct: bring a

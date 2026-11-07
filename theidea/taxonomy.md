@@ -155,3 +155,91 @@ exactly.ai is a different business from the one assumed, and the difference is u
 what was **not** seen: the actual training UI. it is behind a login or a sales call, and the public
 site does not show how a style is weighted or blended. "weighted, like exactly.ai" is the owner's
 description and has not been confirmed from the product.
+
+## what illustrace already knows about styles (read from tinkrland/illustrace, 2026-11-07)
+
+the owner pointed at their own repo as research for the **style** kind and said it is "not turnkey"
+and that flowby would do **lora training on diffusion images instead**, so it differs. read as such:
+illustrace is a *benchmark and measurement* project; its learned layer is a small part of it. what
+carries over and what does not:
+
+### what carries over (the learned half, which is the half flowby needs)
+
+* **a working colab recipe, debugged against a real run.** `runner/colab_micro_lora.py` trains a
+  flux.1-dev lora with kohya sd-scripts on a free t4. it uses `--fp8_base`, fp16 (the t4 has no
+  bf16), cached latents and text-encoder outputs, rank/alpha 16, lr 1e-4, 10 epochs x 3 repeats.
+  the commit trail shows what actually broke: the kohya install had to run from inside the checkout,
+  a partial clone had to be healed, and the first live run was **killed silently by the host's
+  ~12gb of system ram** while loading the 23.8gb checkpoint. `--lowram` plus `--blocks_to_swap 8`
+  fixed that. this is the answer to "will it fit": yes, but only with those flags, and the failure
+  was an out-of-memory kill with no traceback.
+* **resume is already built.** weights are cached on the user's drive, a checkpoint and training
+  state are saved every 2 epochs, and a rerun resumes from the last state. this is the
+  checkpoint-and-resume requirement written up in the section above, already solved in code.
+* **time on a t4 is measured, not guessed:** 15 images x 3 repeats x 10 epochs is 450 steps, about
+  10 to 20 seconds a step, a **1.5 to 2.5 hour** session. that is shorter than the 3 to 4 hours
+  found by search, because it is a deliberately tiny corpus. 10 to 30 images is the stated range for
+  a coherent style, and 20 to 50 at 1024px for a "consistent" one.
+* **a dataset contract.** one caption file per image, every caption must start with a **trigger
+  word** that is not an english subword (`skrfrnt`, `dgtlwc`), the run refuses to start if a caption
+  lacks it, and a corpus is checked **before** a gpu-hour is spent. their profiling caught two
+  artists' worth of technique mixed into one folder before it trained a "mush". a style needs this
+  gate.
+* **composition limits, from the diffusers docs they cite:** adapter interference grows past 2 or 3
+  simultaneous style loras. house rules: each weight 0.3 to 0.7, total near 1.0 to 1.2, and prefer
+  spatial or attention masking over raw stacking. this is the budget for "weighted" styles, and it
+  caps how many a single node can blend.
+* **weights update in memory**, so a strength slider can be live with no retraining. a style's
+  strength is a runtime input, not a property of the trained file.
+* **the job ledger.** a queue of jobs (queued, running, done, failed) that cannot be rewound, a
+  pull-model runner that claims one job, and a preregistered gate and kill condition written before
+  each run. flowby's `compute.md` lanes are the same idea.
+* **the node UI conclusion matches ours:** react flow (xyflow, MIT) as the canvas, no execution on
+  the canvas, preset = graph json. a "gravity" order resolves conflicts between references
+  independently of strength (rank decays at 0.65 per step). it is a ready answer to "two styles
+  claim the same thing, who wins".
+
+### what does not carry over, and why the owner is right to split from it
+
+* **the classical operators.** illustrace measures style as numbers (stroke width, palette in lab
+  space, edge entropy) and moves one at a time by deterministic image operators with no model.
+  flowby's styles are *learned weights*, so the numbers are not the mechanism. the useful
+  residue is their **probe**: after training, re-measure the adapter's outputs against the corpus
+  (palette distance in cie lab, delta-e under 10 for fidelity; unclaimed factors no worse than the
+  untrained model plus one standard deviation for leakage). it is a way to *test* a trained style
+  without a human, and it does not depend on how the style was made.
+* **its scope is narrow on purpose:** hand-drawn and graphic illustration, icons, sprites,
+  low-poly. it excludes photoreal, people and product work. flowby does 3d and product shots
+  (vectary's whole territory), so illustrace's findings may not transfer there.
+* **its one-factor-at-a-time claim.** "move stroke roughness without moving palette" is the
+  scientific point of that project. a lora moves everything it learned together; a trained style is
+  the *opposite* of a controllable single factor. that is the real trade the owner is making, and it
+  is why styles are a different kind from presets and tools.
+
+### what illustrace has **not** shown, so it cannot be cited as proof
+
+its own readme says it plainly: **nothing has trained yet, zero checkpoints.** the colab script has
+been hardened by failures, but there is no recorded finished run, no loss, no adapter and no probe
+score on a real adapter. the commit trail ends at "harden colab training against timeouts". the
+repo also gitignores `adapters/` and `data/micro/`, so a finished run, if one exists, would not be
+visible here. so:
+
+| claim | illustrace's evidence | state |
+| --- | --- | --- |
+| the recipe fits a free t4 | flags chosen to survive an oom kill, estimate of 1.5 to 2.5 h | **designed and debugged, not shown finishing** |
+| resume survives a cut session | resume path written | **written, not exercised in the record** |
+| a trained adapter is faithful and leak-free | a probe with thresholds | **instrument built, never pointed at a real adapter** |
+| flux.1-dev may be used | repo notes the non-commercial licence and a licence swap for commercial use | **known, matches the open risk above** |
+
+### things this changes in the plan
+
+* **the licence question is now answered by their own note:** flux.1-dev is non-commercial research
+  use; a commercial product needs a different base or a licence. for flowby that decides the base
+  model before any style is trained, so it should be settled first.
+* **training needs a hugging face token from an account that accepted the flux licence.** that is a
+  second credential the user supplies, besides google. flowby must not hold it either.
+* **the "lend colab to the agent through a browser" idea has a simpler version:** the illustrace
+  script is meant to be run by the user pasting cells into a notebook, with the corpus as a zip
+  upload and a token as an environment variable. the browser-driving route is only needed if the
+  user does not want to paste anything. the script is also usable as a generated notebook the user
+  opens and runs, which avoids driving google's ui at all (and the terms risk with it).
