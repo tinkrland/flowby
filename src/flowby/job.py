@@ -161,6 +161,7 @@ class Store:
             seen[name] = {
                 "name": name,
                 "dtype": declared[name]["dtype"],
+                "kind": declared[name].get("kind"),
                 "element": declared[name]["element"],
                 "sha256": digest,
                 "bytes": int(record.get("bytes") or 0),

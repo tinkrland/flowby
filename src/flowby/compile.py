@@ -17,12 +17,13 @@ import hashlib
 import json
 import time
 
+from . import artifacts as outputs
 from . import dtypes, presets, routes
 from .graph import GraphRefused
 
 CONTRACT = "flowby/1"
 
-ARTIFACT_SUFFIX = {"mesh": "glb", "video": "mp4", "image": "png", "text": "txt"}
+# the suffix a graph leaves with is owned by artifacts.py, where a font and a bundle also live.
 
 # what a board holds, by wire. used when something has to stand in for a missing asset.
 KIND_FOR = {"image": "image", "video": "video", "mesh": "model", "text": "text"}
@@ -152,10 +153,11 @@ def plan(scene, route: str | None = None, present: set[str] | None = None,
 
     artifacts = []
     for element_id, shown in display.items():
-        suffix = ARTIFACT_SUFFIX[shown["dtype"]]
+        suffix = outputs.suffix_for_wire(shown["dtype"])
         owner = tail_of.get(shown["node"])
         if owner is None:
             artifacts.append({"name": f"{element_id}.{suffix}", "dtype": shown["dtype"],
+                              "kind": outputs.kind_for_wire(shown["dtype"]),
                               "element": element_id, "variant": None})
             continue
         count = len(found[owner][1])
@@ -163,6 +165,7 @@ def plan(scene, route: str | None = None, present: set[str] | None = None,
         shown["chosen"] = min(scene.elements[element_id].chosen, count - 1)
         for i in range(1, count + 1):
             artifacts.append({"name": f"{element_id}#{i}.{suffix}", "dtype": shown["dtype"],
+                              "kind": outputs.kind_for_wire(shown["dtype"]),
                               "element": element_id, "variant": i})
 
     board = [

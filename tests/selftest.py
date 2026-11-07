@@ -26,6 +26,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from flowby import compile as compiler  # noqa: E402
+from flowby import artifacts as outputs  # noqa: E402
 from flowby import catalogue, dtypes, modes, presets, routes, styles  # noqa: E402
 from flowby import hub as hubmod  # noqa: E402
 from flowby import job as jobs  # noqa: E402
@@ -1644,6 +1645,198 @@ class StyleProbe(unittest.TestCase):
 
     def test_the_noise_caveat_travels_with_the_verdict(self):
         self.assertIn("noise", styles.validate_probe({"palette_de": 5.0}, self.FLOOR)["caveat"])
+
+
+SRC = outputs.Source(board="b1", job="fb_job1", plan_digest="fb_" + "c" * 32, element="e1", preset="fontasy")
+
+
+def rec(ext, n=1000, ch="a"):
+    return {"ext": ext, "sha256": ch * 64, "bytes": n}
+
+
+FULL_LATIN = list(range(0x41, 0x5B)) + list(range(0x61, 0x7B)) + list(range(0x30, 0x3A))
+
+
+def a_font(**over):
+    kw = dict(kind="font", name="my hand", records=[rec("otf", ch="a"), rec("ttf", ch="b"), rec("woff", ch="c")],
+              source=SRC, licence="OFL", meta={"family": "My Hand", "codepoints": FULL_LATIN})
+    kw.update(over)
+    return outputs.file_artifact(**kw)
+
+
+class ArtifactKinds(unittest.TestCase):
+    def test_the_four_wires_each_end_in_a_kind(self):
+        for wire in dtypes.WIRES:
+            self.assertIn(outputs.kind_for_wire(wire), outputs.KINDS)
+
+    def test_a_mesh_is_filed_as_a_model_because_the_wire_names_geometry_and_the_kind_names_the_file(self):
+        self.assertEqual(outputs.kind_for_wire("mesh"), "model")
+        self.assertEqual(outputs.suffix_for_wire("mesh"), "glb")
+
+    def test_the_suffixes_are_the_ones_the_compiler_used_before_the_move(self):
+        # moving the table must not rename a single artifact, or every stored job goes stale.
+        self.assertEqual({w: outputs.suffix_for_wire(w) for w in dtypes.WIRES},
+                         {"mesh": "glb", "video": "mp4", "image": "png", "text": "txt"})
+
+    def test_a_font_is_not_a_wire(self):
+        self.assertNotIn("font", dtypes.WIRES)
+        self.assertIsNone(outputs.KINDS["font"]["wire"])
+        with self.assertRaises(outputs.ArtifactRefused):
+            outputs.kind_for_wire("font")
+
+    def test_the_dashboard_has_the_four_tabs_the_owner_named(self):
+        self.assertEqual(set(outputs.TABS), {"projects", "boards", "assets", "artifacts"})
+
+    def test_every_compiled_artifact_declares_its_kind(self):
+        plan = compiler.preset_plan("text-to-image")
+        for art in plan["artifacts"]:
+            self.assertIn(art["kind"], outputs.KINDS)
+            self.assertTrue(art["name"].endswith("." + outputs.KINDS[art["kind"]]["primary"]))
+
+
+class FontArtifacts(unittest.TestCase):
+    def test_a_font_is_several_files_and_one_thing(self):
+        font = a_font()
+        self.assertEqual(sorted(f.ext for f in font.files), ["otf", "ttf", "woff"])
+        self.assertEqual(font.primary.ext, "otf")
+        self.assertEqual(font.total_bytes, 3000)
+
+    def test_a_font_without_its_otf_is_refused(self):
+        with self.assertRaises(outputs.ArtifactRefused) as cm:
+            a_font(records=[rec("woff")])
+        self.assertIn("needs its .otf", str(cm.exception))
+
+    def test_a_font_cannot_arrive_as_a_png(self):
+        with self.assertRaises(outputs.ArtifactRefused) as cm:
+            a_font(records=[rec("otf"), rec("png", ch="d")])
+        self.assertIn("not .png", str(cm.exception))
+
+    def test_a_zero_byte_file_is_refused(self):
+        with self.assertRaises(outputs.ArtifactRefused) as cm:
+            a_font(records=[rec("otf", n=0)])
+        self.assertIn("zero bytes", str(cm.exception))
+
+    def test_a_file_without_a_hash_is_refused(self):
+        with self.assertRaises(outputs.ArtifactRefused) as cm:
+            a_font(records=[{"ext": "otf", "bytes": 10}])
+        self.assertIn("sha256", str(cm.exception))
+
+    def test_the_same_extension_twice_is_refused(self):
+        with self.assertRaises(outputs.ArtifactRefused):
+            a_font(records=[rec("otf"), rec("otf", ch="z")])
+
+    def test_a_font_needs_a_family_name(self):
+        with self.assertRaises(outputs.ArtifactRefused) as cm:
+            a_font(meta={"codepoints": FULL_LATIN})
+        self.assertIn("family name", str(cm.exception))
+
+    def test_a_font_must_say_which_codepoints_it_maps(self):
+        with self.assertRaises(outputs.ArtifactRefused) as cm:
+            a_font(meta={"family": "X", "glyphs": 62})
+        # a glyph count is not a mapping. the message for a missing key is not the one for an empty list.
+        self.assertIn("must say which codepoints", str(cm.exception))
+        with self.assertRaises(outputs.ArtifactRefused) as cm:
+            a_font(meta={"family": "X", "codepoints": []})
+        self.assertIn("maps no codepoints", str(cm.exception))
+
+    def test_a_complete_latin_font_reports_complete(self):
+        cov = outputs.coverage({"codepoints": FULL_LATIN})
+        self.assertTrue(cov["complete"])
+        self.assertEqual((cov["covered"], cov["of"]), (62, 62))
+        self.assertEqual(cov["missing"], [])
+
+    def test_an_uppercase_only_sheet_is_a_font_but_a_partial_one(self):
+        # the common case: someone scans one practice row. it files, and the badge says what is missing.
+        font = a_font(meta={"family": "Caps", "codepoints": list(range(0x41, 0x5B))})
+        cov = outputs.coverage(font.meta)
+        self.assertFalse(cov["complete"])
+        self.assertEqual(cov["missing"], ["lowercase", "digits"])
+        self.assertEqual(cov["covered"], 26)
+
+    def test_fontasys_101_character_set_covers_the_core(self):
+        fontasy = list(range(0x21, 0x7F)) + [0xA3, 0x20AC, 0x20B9]  # ! through ~, then pound, euro, rupee
+        self.assertEqual(len(fontasy), 94 + 3)
+        self.assertTrue(outputs.coverage({"codepoints": fontasy})["complete"])
+
+    def test_the_bundle_identity_ignores_the_order_files_arrived_in(self):
+        a = a_font(records=[rec("otf", ch="a"), rec("ttf", ch="b"), rec("woff", ch="c")])
+        b = a_font(records=[rec("woff", ch="c"), rec("otf", ch="a"), rec("ttf", ch="b")])
+        self.assertEqual(a.digest, b.digest)
+
+    def test_changing_one_file_changes_the_bundle(self):
+        a = a_font()
+        b = a_font(records=[rec("otf", ch="a"), rec("ttf", ch="b"), rec("woff", ch="9")])
+        self.assertNotEqual(a.digest, b.digest)
+
+    def test_the_artifact_id_is_stable_for_the_same_job_and_name(self):
+        self.assertEqual(a_font().id, a_font().id)
+
+
+class LetteringArtifacts(unittest.TestCase):
+    def test_fontasy_mask_output_is_lettering_with_a_png_and_an_svg(self):
+        art = outputs.file_artifact("lettering", "gingham hello",
+                                    [rec("png"), rec("svg", ch="e")], SRC)
+        self.assertEqual(art.primary.ext, "png")
+        self.assertEqual(sorted(f.ext for f in art.files), ["png", "svg"])
+
+    def test_lettering_is_not_a_font_and_does_not_need_codepoints(self):
+        outputs.file_artifact("lettering", "x", [rec("png")], SRC)  # must not raise
+
+    def test_an_unknown_kind_is_refused_with_the_list(self):
+        with self.assertRaises(outputs.ArtifactRefused) as cm:
+            outputs.file_artifact("spreadsheet", "x", [rec("png")], SRC)
+        self.assertIn("font", str(cm.exception))
+
+
+class ArtifactsTab(unittest.TestCase):
+    def setUp(self):
+        other = outputs.Source(board="b2", job="fb_job2", plan_digest="fb_" + "d" * 32)
+        self.items = [
+            a_font(),
+            outputs.file_artifact("image", "owl", [rec("png", ch="1")], SRC),
+            outputs.file_artifact("image", "fox", [rec("png", ch="2")], other),
+            outputs.file_artifact("lora", "harbour", [rec("safetensors", ch="3")], other),
+        ]
+
+    def test_the_tab_lists_everything_in_a_stable_order(self):
+        rows = outputs.tab(self.items)
+        # sorted by kind then name: font, image (fox before owl), lora. never by arrival order.
+        self.assertEqual([r["name"] for r in rows], ["my hand", "fox", "owl", "harbour"])
+        self.assertEqual(rows, outputs.tab(list(reversed(self.items))))
+
+    def test_the_filter_chips_count_by_kind(self):
+        self.assertEqual(outputs.counts(self.items), {"font": 1, "image": 2, "lora": 1})
+
+    def test_filtering_by_kind(self):
+        self.assertEqual({r["kind"] for r in outputs.tab(self.items, kind="image")}, {"image"})
+
+    def test_filtering_by_board(self):
+        self.assertEqual({r["name"] for r in outputs.tab(self.items, board="b2")}, {"fox", "harbour"})
+
+    def test_searching_by_name_ignores_case(self):
+        self.assertEqual([r["name"] for r in outputs.tab(self.items, query="OWL")], ["owl"])
+
+    def test_a_font_row_carries_its_coverage_and_an_image_row_does_not(self):
+        rows = {r["name"]: r for r in outputs.tab(self.items)}
+        self.assertIn("coverage", rows["my hand"])
+        self.assertNotIn("coverage", rows["owl"])
+
+    def test_a_style_adapter_is_an_artifact_too(self):
+        # the lora a style trains is an output, so it lands in the same tab as everything else.
+        self.assertIn("lora", outputs.counts(self.items))
+
+    def test_an_artifact_is_never_an_orphan(self):
+        for art in self.items:
+            line = outputs.lineage(art)[0]
+            self.assertIn(art.source.board, line)
+            self.assertIn(art.source.job, line)
+
+    def test_a_simulated_artifact_says_so_in_its_lineage(self):
+        self.assertIn("simulated", outputs.lineage(self.items[0])[0])
+
+    def test_a_real_artifact_does_not_claim_to_be_simulated(self):
+        real = outputs.file_artifact("image", "x", [rec("png")], SRC, simulated=False)
+        self.assertNotIn("simulated", outputs.lineage(real)[0])
 
 
 if __name__ == "__main__":

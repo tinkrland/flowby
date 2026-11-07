@@ -19,6 +19,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
                                 crossings between them, which the tests perform
     catalogue.py                the owner's 29 bullets as data, and what each one became
     routes.py                   where a job runs and what each place honestly cannot do
+    artifacts.py                what leaves a graph: kinds, bundles (a font is three files), provenance,
+                                and the dashboard's artifacts tab
     styles.py                   the one trained kind: a corpus gate, a lifecycle, a colab training plan,
                                 and the limits on stacking styles
     job.py                      a plan's life, its illegal moves, its artifacts, its watchdog
@@ -52,6 +54,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     main.md                     the owner's brief, kept as written
     decisions.md                the decisions this tree makes on top of it
     taxonomy.md                 the seven kinds (style, tool, technique, preset, recipe, workflow, factory); proposed
+    dashboard.md                the four tabs (projects, boards, assets, artifacts) and what an artifact is,
+                                with fonts read from the owner's fontasy repos
   journal/
     2026-11-07.md               the day the board existed and the graph under it
     2026-11-07-what-the-videos-showed.md
