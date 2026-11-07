@@ -300,3 +300,60 @@ the owner supplied a Base44 personal access token for reading studio. it authent
 agent, and an imported public app). studio's app id is not among them, so the token does not reach
 studio's code or data. studio is treated as unread, and its style transfer flow is still the one
 piece of research missing. the token is held as a secret and never written to the repo.
+
+### fluxgym, checked (2026-11-07)
+
+the owner asked for fluxgym to be checked as an open-source option for the style trainer. read from
+a fresh clone, not from a summary.
+
+* **licence: MIT** (copyright cocktailpeanut, 2024). the app itself is free to use, modify and
+  sell. last commit 2026-07-28, 3.3k stars, 372 forks, 399 open issues. a gradio web ui over kohya
+  sd-scripts, which does the training. the `Advanced` tab exposes every kohya flag.
+* **the models it trains on are not MIT.** its `models.yaml` lists `flux-dev` and `flux1-dev2pro`
+  under the **flux-1-dev non-commercial licence**, and `flux-schnell` under **apache-2.0**. so the
+  tool is open source but the default base is not, which is the licence question from earlier,
+  restated by the tool's own config. the readme says schnell gave "couldn't get high quality
+  results, so not really recommended". a sold style therefore trades quality (dev) against licence
+  (schnell). custom bases can be added by editing `models.yaml`.
+* **it is a local app, not a notebook.** it installs through pinokio, a manual venv, or docker, and
+  serves a ui on port 7860. there is no colab path in the repo (no mention of colab anywhere in it).
+* **it does not run on a free colab t4 as shipped.** the generated training command hard-codes
+  `--mixed_precision bf16` and `--save_precision bf16` (app.py lines 454, 467, 468) and `--highvram`
+  (line 476), and never branches on fp16. a t4 has no bf16. it also never sets `--lowram` or
+  `--blocks_to_swap`, which is exactly what stopped the host-ram oom kill in illustrace's first live
+  run. the 12g profile adds `--split_mode` and adafactor, which helps vram, not host ram.
+* **so the two recipes line up like this:**
+
+| | fluxgym | illustrace colab script |
+| --- | --- | --- |
+| licence | MIT | the owner's own repo |
+| ui | gradio, captions and sample images in the browser | none, a script run from notebook cells |
+| precision | bf16 (needs an ampere gpu or newer) | fp16 (works on a t4) |
+| host ram | not handled | `--lowram` and `--blocks_to_swap 8` |
+| resume | not seen | drive-cached weights, state saved every 2 epochs |
+| runs on a free t4 | **no, not without changing flags** | **designed and debugged for it, never shown finishing** |
+
+what to take from fluxgym is its **ui and dataset flow** (upload, caption with the trigger word,
+sample images every n steps with a fixed seed so you watch the lora evolve, publish to hugging face)
+and its flag table per vram size. what to take from illustrace is the **colab-safe flags and
+resume**. the cheapest honest plan is to generate illustrace's script as the notebook and borrow
+fluxgym's sample-image-every-n-steps idea, so a user can see a style forming during a 2 hour run
+instead of finding out at the end.
+
+### base44 studio: what the docs say (2026-11-07)
+
+the owner said studio is in alpha and asked whether the docs cover it. they do not.
+
+* the base44 docs were searched in full (the 205kb index and the 5mb full-text file). there is **no
+  page, section or mention of a studio product**, and the word "alpha" does not appear. the only
+  "studio" hits are an example push notification about a yoga class and a "studio lighting" prompt.
+* a news search and a web search found nothing about a base44 studio either. an unreleased alpha is
+  not expected to be documented, so this is an absence of public evidence, not evidence of absence.
+* the fetch tool refuses `studio.base44.com` and `base44.com/studio` outright ("blocked domain"), a
+  separate wall from the login redirect seen in the browser.
+* the personal access token the owner supplied does not list studio's app among the account's apps.
+
+so nothing about studio's style transfer flow is known beyond what the owner has told us. the
+remaining routes are the owner signing in through the live browser view, or the owner describing or
+screenshotting the flow. nothing in this tree should claim to match studio until one of those
+happens.
