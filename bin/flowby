@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# the shim a clone runs, exactly like the other repos here: put src on the path, then run the module
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="${here}/src${PYTHONPATH:+:${PYTHONPATH}}"
+exec python3 -m flowby.cli "$@"

@@ -1,0 +1,859 @@
+"""flowby selftests: stdlib only, no network, no gpu. run: python3 tests/selftest.py
+
+the suite holds the tree to the claims the readme makes. the four that matter most:
+
+  a wire carries one dtype and never coerces, so a conversion is a node you can see;
+  a preset is a subgraph that chains off whatever the element is currently showing;
+  a plan is flat and every wire in it already names a step, so the worker interprets nothing;
+  a route refuses a job that will not survive it, before a browser is opened.
+
+the kernel and alignment halves run as subprocesses because they are not python: `bash -n` and
+`node --test` either work here or the tree is lying about itself.
+"""
+
+import contextlib
+import io
+import json
+import os
+import pathlib
+import subprocess
+import sys
+import tempfile
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from flowby import compile as compiler  # noqa: E402
+from flowby import dtypes, presets, routes  # noqa: E402
+from flowby import hub as hubmod  # noqa: E402
+from flowby import job as jobs  # noqa: E402
+from flowby.graph import Graph, GraphRefused, Node, Port  # noqa: E402
+from flowby.scene import Scene, SceneRefused, Transform  # noqa: E402
+
+ASSET = "sha256:" + "a" * 64
+MODEL_ASSET = "sha256:" + "b" * 64
+
+
+def board() -> Scene:
+    """a board with one sketch, one caption, and nothing applied."""
+    scene = Scene(id="t", title="test board")
+    scene.add("sketch", "owl", asset=ASSET, transform=Transform(x=0, y=0))
+    scene.add("text", "caption", text="a ceramic owl")
+    return scene
+
+
+# ---------------------------------------------------------------------------
+
+
+class Wires(unittest.TestCase):
+    def test_four_wires_and_four_colours(self):
+        self.assertEqual(len(dtypes.WIRES), 4)
+        colours = [w.colour for w in dtypes.WIRES.values()]
+        self.assertEqual(len(set(colours)), 4)
+        for name in ("text", "image", "video", "mesh"):
+            self.assertIn(name, dtypes.WIRES)
+
+    def test_a_colour_comes_from_the_dtype_and_nowhere_else(self):
+        self.assertEqual(dtypes.colour("image"), "green")
+        with self.assertRaises(dtypes.UnknownDtype):
+            dtypes.colour("mask")  # a role is not a wire
+        with self.assertRaises(dtypes.UnknownDtype):
+            dtypes.colour("audio")
+
+    def test_roles_ride_green_instead_of_earning_a_colour(self):
+        for name in dtypes.ROLES:
+            self.assertEqual(dtypes.of_role(name), "image")
+        with self.assertRaises(dtypes.UnknownDtype):
+            dtypes.role("vibes")
+
+    def test_nothing_coerces(self):
+        self.assertTrue(dtypes.accepts("image", "image"))
+        self.assertFalse(dtypes.accepts("image", "mesh"))
+        self.assertIn("green", dtypes.mismatch("image", "mesh"))
+        self.assertIn("red", dtypes.mismatch("image", "mesh"))
+
+
+class Graphs(unittest.TestCase):
+    def graph(self) -> Graph:
+        g = Graph()
+        g.add(Node("a", "make.image", outputs={"out": Port("image")}))
+        g.add(Node("b", "use.image", inputs={"in": Port("image")},
+                   outputs={"out": Port("image")}))
+        return g
+
+    def test_a_wire_between_two_dtypes_is_refused(self):
+        g = self.graph()
+        g.add(Node("m", "want.mesh", inputs={"in": Port("mesh")}))
+        with self.assertRaises(GraphRefused) as caught:
+            g.add_edge("a", "out", "m", "in")
+        self.assertIn("green", str(caught.exception))
+        self.assertIn("red", str(caught.exception))
+
+    def test_a_port_that_does_not_exist_is_refused(self):
+        g = self.graph()
+        with self.assertRaises(GraphRefused):
+            g.add_edge("a", "nope", "b", "in")
+        with self.assertRaises(GraphRefused):
+            g.add_edge("ghost", "out", "b", "in")
+
+    def test_an_input_takes_one_wire_unless_it_says_many(self):
+        g = self.graph()
+        g.add(Node("c", "other.image", outputs={"out": Port("image")}))
+        g.add_edge("a", "out", "b", "in")
+        with self.assertRaises(GraphRefused) as caught:
+            g.add_edge("c", "out", "b", "in")
+        self.assertIn("one wire", str(caught.exception))
+        g.add(Node("d", "handles.image", inputs={"in": Port("image", many=True)}))
+        g.add_edge("a", "out", "d", "in")
+        g.add_edge("c", "out", "d", "in")
+        self.assertEqual(len(g.edges_into("d", "in")), 2)
+
+    def test_a_cycle_is_refused_and_the_message_names_it(self):
+        g = Graph()
+        for name in ("a", "b"):
+            g.add(Node(name, "pass.through", inputs={"in": Port("image", optional=True)},
+                       outputs={"out": Port("image")}))
+        g.add_edge("a", "out", "b", "in")
+        with self.assertRaises(GraphRefused) as caught:
+            g.add_edge("b", "out", "a", "in")
+        self.assertIn("cycle", str(caught.exception))
+        self.assertIn("->", str(caught.exception))
+
+    def test_a_node_cannot_wire_into_itself(self):
+        g = Graph()
+        g.add(Node("a", "loop", inputs={"in": Port("image")}, outputs={"out": Port("image")}))
+        with self.assertRaises(GraphRefused):
+            g.add_edge("a", "out", "a", "in")
+
+    def test_the_same_wire_twice_is_refused(self):
+        g = self.graph()
+        g.add_edge("a", "out", "b", "in")
+        with self.assertRaises(GraphRefused):
+            g.add_edge("a", "out", "b", "in")
+
+    def test_topological_order_respects_wires_and_does_not_wander(self):
+        g = self.graph()
+        g.add(Node("c", "last", inputs={"in": Port("image")}))
+        g.add_edge("a", "out", "b", "in")
+        g.add_edge("b", "out", "c", "in")
+        first = g.topo()
+        self.assertLess(first.index("a"), first.index("b"))
+        self.assertLess(first.index("b"), first.index("c"))
+        self.assertEqual(first, g.topo())
+
+    def test_removing_a_node_takes_its_wires_with_it(self):
+        g = self.graph()
+        g.add_edge("a", "out", "b", "in")
+        gone = g.remove("a")
+        self.assertEqual(len(gone), 1)
+        self.assertEqual(g.edges, [])
+        self.assertNotIn("a", g.nodes)
+
+    def test_check_reports_an_input_that_nobody_wired(self):
+        g = Graph()
+        g.add(Node("lonely", "op", inputs={"in": Port("image")}))
+        problems = g.check()
+        self.assertEqual(len(problems), 1)
+        self.assertIn("lonely.in", problems[0])
+
+
+class PresetGraphs(unittest.TestCase):
+    def test_every_preset_wires_into_a_clean_graph_on_its_own(self):
+        for name in presets.names():
+            preset = presets.get(name)
+            graph = Graph()
+            graph.add(Node("source", "element.anything", outputs={"media": Port(preset.input_dtype)}))
+            for role, step in preset.steps.items():
+                graph.add(Node(role, step.op, inputs=dict(step.inputs),
+                               outputs=dict(step.outputs), params=dict(step.params)))
+            graph.add_edge("source", "media", preset.entry, preset.entry_port)
+            for a, ap, b, bp in preset.edges:
+                graph.add_edge(a, ap, b, bp)  # raises if a preset disagrees with itself
+            for slot in preset.slots:
+                graph.add(Node(f"slot:{slot.name}", "element.standin",
+                               outputs={"media": Port(slot.dtype)}))
+                graph.add_edge(f"slot:{slot.name}", "media", slot.node, slot.port)
+            self.assertEqual(graph.check(), [], name)
+            self.assertIn(preset.sink, graph.nodes, name)
+
+    def test_no_preset_claims_it_has_run(self):
+        for preset in presets.PRESETS.values():
+            self.assertEqual(preset.state, "designed", preset.name)
+            self.assertIn("no asset", preset.evidence)
+
+    def test_a_slider_hits_both_ends_of_the_machine_range(self):
+        preset = presets.get("sketch-to-mesh")
+        slider = preset.sliders["detail"]
+        low = dict((node, value) for node, _, value in slider.project(slider.low))
+        high = dict((node, value) for node, _, value in slider.project(slider.high))
+        self.assertEqual(low["mould"], 4000)
+        self.assertEqual(high["mould"], 150000)
+
+    def test_a_slider_is_monotonic(self):
+        preset = presets.get("animate-composition")
+        slider = preset.sliders["duration"]
+        values = [slider.project(v)[0][2] for v in (2, 5, 10, 15)]
+        self.assertEqual(values, sorted(values))
+        self.assertEqual(values[0], 48)
+        self.assertEqual(values[-1], 360)
+
+    def test_a_slider_outside_its_range_is_refused(self):
+        preset = presets.get("frosted-glass")
+        with self.assertRaises(presets.PresetRefused):
+            preset.sliders["frost"].project(4.0)
+        with self.assertRaises(presets.PresetRefused):
+            preset.sliders["frost"].project("a lot")
+
+    def test_a_choice_slider_carries_a_payload_not_a_number(self):
+        preset = presets.get("text-to-image")
+        slider = preset.sliders["mood"]
+        self.assertEqual(slider.project("neon")[0][2], "neon, wet streets")
+        self.assertEqual(slider.where("clean"), 0.0)
+        self.assertEqual(slider.where("paper"), 1.0)
+        with self.assertRaises(presets.PresetRefused):
+            slider.project("baroque")
+
+    def test_a_choice_default_that_is_not_a_choice_is_refused_at_import(self):
+        with self.assertRaises(presets.PresetRefused):
+            presets.Slider(name="x", label="x", low=0, high=1, default=0,
+                           means="", targets=(), kind="choice",
+                           choices=(("a", "a"), ("b", "b")))
+
+    def test_a_dtype_change_hands_over_through_a_node(self):
+        preset = presets.get("animate-composition")
+        self.assertNotEqual(preset.input_dtype, preset.out_dtype())
+        crossing = [step for step in preset.steps.values()
+                    if {p.dtype for p in step.inputs.values()} != {p.dtype for p in step.outputs.values()}]
+        self.assertTrue(crossing, "red to blue must be a node, not a rule")
+        self.assertEqual(preset.steps["film"].outputs["out"].dtype, "video")
+
+    def test_every_preset_declares_the_gpu_it_would_need(self):
+        for preset in presets.PRESETS.values():
+            if preset.input_dtype == "text" or preset.sliders.get("strength"):
+                self.assertTrue(any(s.requires.get("gpu") for s in preset.steps.values()),
+                                f"{preset.name} generates and should say it needs a gpu")
+
+
+class Board(unittest.TestCase):
+    def test_every_element_is_a_node(self):
+        scene = board()
+        self.assertEqual(set(scene.elements), set(scene.graph.nodes))
+        for element in scene.elements.values():
+            self.assertEqual(scene.graph.nodes[element.id].outputs["media"].dtype,
+                             element.dtype)
+
+    def test_an_element_without_bytes_is_refused(self):
+        scene = Scene()
+        with self.assertRaises(SceneRefused) as caught:
+            scene.add("image", "blank")
+        self.assertIn("bytes", str(caught.exception))
+        with self.assertRaises(SceneRefused):
+            scene.add("text", "words")
+        with self.assertRaises(SceneRefused):
+            scene.add("hologram", "no")
+
+    def test_a_model_lands_on_a_three_dimensional_plane(self):
+        scene = Scene()
+        model = scene.add("model", "bust", asset=MODEL_ASSET)
+        self.assertEqual(model.plane, "3d")
+        self.assertEqual(model.dtype, "mesh")
+
+    def test_a_preset_chains_off_what_the_element_is_showing(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        scene.apply(owl.id, "sketch-to-mesh")
+        self.assertEqual(scene.rendered_dtype(owl.id), "mesh")
+        scene.apply(owl.id, "frosted-glass")
+        self.assertEqual(scene.rendered_dtype(owl.id), "mesh")
+        shell = [n for n in scene.graph.nodes if n.endswith("/frosted-glass/shell")][0]
+        upstream = {e.src[0] for e in scene.graph.edges if e.dst[0] == shell}
+        self.assertEqual(upstream, {n for n in scene.graph.nodes if n.endswith("/bake")})
+        # the raw sketch is still a node, so nothing was consumed
+        self.assertIn(owl.id, scene.graph.nodes)
+
+    def test_converting_a_sketch_flips_the_plane(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        self.assertEqual(owl.plane, "2d")
+        scene.apply(owl.id, "sketch-to-mesh")
+        self.assertEqual(owl.plane, "3d")
+        self.assertTrue(any("plane" in note for note in owl.history))
+
+    def test_applying_the_same_preset_twice_lowers_one_slider(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        first = scene.apply(owl.id, "sketch-to-mesh", {"detail": 20000})
+        before = len(scene.graph.nodes)
+        second = scene.apply(owl.id, "sketch-to-mesh", {"detail": 120000})
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(len(scene.graph.nodes), before)
+        mould = scene.graph.nodes[f"{first.id}/mould"]
+        self.assertEqual(mould.params["target_faces"], 120000)
+
+    def test_detaching_keeps_every_wire_and_forks_the_next_one(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        instance = scene.apply(owl.id, "sketch-to-mesh")
+        edges = list(scene.graph.edges)
+        nodes = list(scene.graph.order)
+        scene.detach(instance.id)
+        self.assertEqual(scene.graph.edges, edges)
+        self.assertEqual(scene.graph.order, nodes)
+        self.assertTrue(all(scene.graph.nodes[n].instance is None for n in instance.nodes))
+        # the loose nodes are still what the frame draws (a mesh), so the same preset cannot be
+        # applied to them again: it needs a green wire and the element is showing red.
+        with self.assertRaises(SceneRefused):
+            scene.apply(owl.id, "sketch-to-mesh")
+        scene.show(owl.id)
+        forked = scene.apply(owl.id, "sketch-to-mesh")
+        self.assertNotEqual(forked.id, instance.id)
+        self.assertTrue(forked.id.endswith("@2"))
+        self.assertEqual(len(scene.graph.nodes), len(nodes) + 3)
+
+    def test_the_wrong_wire_is_refused_with_the_next_click_named(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        model = scene.add("model", "bust", asset=MODEL_ASSET)
+        with self.assertRaises(SceneRefused) as caught:
+            scene.apply(model.id, "style-transfer")
+        self.assertIn("blue" if False else "red", str(caught.exception))
+
+    def test_a_text_element_can_become_an_image(self):
+        scene = board()
+        caption = scene.elements["text-2"]
+        scene.apply(caption.id, "text-to-image")
+        self.assertEqual(scene.rendered_dtype(caption.id), "image")
+
+    def test_removing_an_element_takes_its_presets_with_it(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        scene.apply(owl.id, "sketch-to-mesh")
+        scene.remove(owl.id)
+        self.assertNotIn(owl.id, scene.graph.nodes)
+        self.assertFalse([n for n in scene.graph.order if "sketch-to-mesh" in n])
+        self.assertEqual(scene.instances, {})
+
+    def test_the_sidebar_offers_what_can_actually_be_applied_now(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        offered = [p["preset"] for p in scene.sidebar(owl.id)["presets"]]
+        self.assertIn("sketch-to-mesh", offered)
+        self.assertIn("style-transfer", offered)
+        self.assertIn("code-container", offered)
+        # frosted glass reads a red wire and the owl is still green: it is not offered yet, and
+        # that is the product's whole argument for chaining rather than a menu of everything.
+        self.assertNotIn("frosted-glass", offered)
+        self.assertNotIn("text-to-image", offered)
+        caption = scene.elements["text-2"]
+        self.assertEqual([p["preset"] for p in scene.sidebar(caption.id)["presets"]],
+                         ["text-to-image"])
+        scene.apply(owl.id, "sketch-to-mesh")
+        after = [p["preset"] for p in scene.sidebar(owl.id)["presets"]]
+        self.assertIn("frosted-glass", after)
+        self.assertIn("animate-composition", after)
+        self.assertIn("sketch-to-mesh", after)          # already applied, still adjustable
+        self.assertNotIn("style-transfer", after)       # it reads green, the owl shows red
+
+    def test_showing_the_original_drops_the_branch_from_the_side_bar(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        scene.apply(owl.id, "sketch-to-mesh")
+        scene.show(owl.id)
+        self.assertEqual(scene.rendered_dtype(owl.id), "image")
+        self.assertEqual(scene.board()[0]["dtype"], "image")
+
+    def test_a_preset_with_a_slot_spawns_incomplete_and_says_what_it_wants(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        look = scene.add("image", "the reference", asset=MODEL_ASSET)
+        instance = scene.apply(owl.id, "style-transfer")
+        self.assertFalse(instance.complete())
+        self.assertEqual(instance.aux, {"the look": None})
+        with self.assertRaises(compiler.CompileRefused) as caught:
+            compiler.plan(scene)
+        self.assertIn("style-transfer", str(caught.exception))
+        scene.link(instance.id, "the look", look.id)
+        self.assertTrue(instance.complete())
+        document = compiler.plan(scene)
+        read = [step for step in document["steps"] if step["op"] == "style.read"][0]
+        self.assertIn(look.id, read["inputs"]["reference"])
+
+    def test_a_slot_refuses_the_wrong_wire_and_a_slot_that_does_not_exist(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        model = scene.add("model", "bust", asset=MODEL_ASSET)
+        instance = scene.apply(owl.id, "style-transfer")
+        with self.assertRaises(SceneRefused) as caught:
+            scene.link(instance.id, "the look", model.id)
+        self.assertIn("red", str(caught.exception))
+        with self.assertRaises(SceneRefused) as caught:
+            scene.link(instance.id, "a coffee", owl.id)
+        self.assertIn("no slot", str(caught.exception))
+
+    def test_a_recipe_is_the_chain_read_back_and_replayed_in_one_call(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        scene.apply(owl.id, "sketch-to-mesh", {"detail": 100000})
+        scene.apply(owl.id, "frosted-glass", {"frost": 0.5})
+        recipe = scene.record(owl.id, "owl pipeline")
+        self.assertEqual([s["preset"] for s in recipe["steps"]],
+                         ["sketch-to-mesh", "frosted-glass"])
+        self.assertGreater(recipe["estimate"]["minutes"], 0)
+        self.assertGreater(recipe["estimate"]["gpu_minutes"], 0)
+
+        second = scene.add("sketch", "the second owl", asset=ASSET)
+        applied = scene.replay(second.id, recipe)
+        self.assertEqual([i.preset for i in applied], ["sketch-to-mesh", "frosted-glass"])
+        self.assertEqual(scene.rendered_dtype(second.id), "mesh")
+        self.assertEqual(applied[0].values["detail"], 100000)
+        self.assertEqual(applied[1].values["frost"], 0.5)
+
+    def test_a_recipe_refuses_a_board_it_was_not_recorded_on(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        scene.apply(owl.id, "sketch-to-mesh")
+        recipe = scene.record(owl.id)
+        caption = scene.elements["text-2"]
+        with self.assertRaises(SceneRefused) as caught:
+            scene.replay(caption.id, recipe)
+        self.assertIn("recorded on a sketch", str(caught.exception))
+
+    def test_every_preset_knows_which_stage_it_belongs_to(self):
+        for preset in presets.PRESETS.values():
+            self.assertIn(preset.stage, presets.STAGES, preset.name)
+        scene = board()
+        scene.apply("sketch-1", "sketch-to-mesh")
+        panel = [p for p in scene.sidebar("sketch-1")["presets"]
+                 if p["preset"] == "sketch-to-mesh"][0]
+        self.assertEqual(panel["stage"], "explore")
+        self.assertGreater(panel["estimate"]["gpu_minutes"], 0)
+
+    def test_the_pipeline_view_colours_wires_by_dtype_only(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        scene.apply(owl.id, "sketch-to-mesh")
+        view = scene.pipeline()
+        for wire in view["wires"]:
+            self.assertEqual(wire["colour"], dtypes.colour(wire["dtype"]))
+        self.assertEqual({w["colour"] for w in view["wires"]}, {"green", "red"})
+
+    def test_the_pipeline_view_places_every_node(self):
+        scene = board()
+        scene.apply("sketch-1", "sketch-to-mesh")
+        view = scene.pipeline()
+        self.assertEqual(len(view["nodes"]), len(scene.graph.nodes))
+        for node in view["nodes"]:
+            self.assertIn("x", node["pos"])
+            self.assertIn("y", node["pos"])
+
+
+class Plans(unittest.TestCase):
+    def test_a_plan_is_flat_and_every_wire_names_an_earlier_step(self):
+        scene = board()
+        scene.apply("sketch-1", "sketch-to-mesh")
+        document = compiler.plan(scene)
+        seen = set()
+        for step in document["steps"]:
+            for port, ref in step["inputs"].items():
+                node, _, port_name = ref.partition(":")
+                self.assertIn(node, seen, f"{step['id']}.{port} points forward at {ref}")
+                self.assertIn(port_name, scene.graph.nodes[node].outputs)
+            seen.add(step["id"])
+
+    def test_only_what_is_displayed_gets_compiled(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        scene.apply(owl.id, "sketch-to-mesh")
+        full = compiler.plan(scene)
+        scene.show(owl.id)
+        thin = compiler.plan(scene)
+        self.assertGreater(len(full["steps"]), len(thin["steps"]))
+        self.assertEqual(len(thin["steps"]), 2)  # the sketch and the caption, nothing else
+
+    def test_an_unwired_required_input_is_refused(self):
+        scene = board()
+        owl = scene.elements["sketch-1"]
+        instance = scene.apply(owl.id, "sketch-to-mesh")
+        scene.graph.remove(f"{instance.id}/read")
+        with self.assertRaises(compiler.CompileRefused) as caught:
+            compiler.plan(scene)
+        self.assertIn("wire", str(caught.exception))
+
+    def test_the_environment_is_aggregated_once(self):
+        scene = board()
+        scene.apply("sketch-1", "sketch-to-mesh")
+        document = compiler.plan(scene)
+        self.assertIn("trimesh", document["env"]["pip"])
+        self.assertEqual(len(document["env"]["pip"]), len(set(document["env"]["pip"])))
+        self.assertIn("triposr", document["env"]["models"])
+        self.assertTrue(document["env"]["gpu"])
+
+    def test_the_same_board_compiles_to_the_same_job(self):
+        first = compiler.preset_plan("sketch-to-mesh")
+        second = compiler.preset_plan("sketch-to-mesh")
+        self.assertEqual(first["job_id"], second["job_id"])
+
+    def test_a_slider_makes_it_a_different_job(self):
+        calm = compiler.preset_plan("sketch-to-mesh", {"detail": 20000})
+        fine = compiler.preset_plan("sketch-to-mesh", {"detail": 140000})
+        self.assertNotEqual(calm["job_id"], fine["job_id"])
+
+    def test_artifacts_are_named_per_element(self):
+        scene = board()
+        scene.apply("sketch-1", "sketch-to-mesh")
+        document = compiler.plan(scene)
+        names = {a["name"] for a in document["artifacts"]}
+        self.assertIn("sketch-1.glb", names)
+        self.assertIn("text-2.txt", names)
+
+    def test_the_contract_is_on_the_plan(self):
+        document = compiler.preset_plan("frosted-glass")
+        self.assertEqual(document["contract"], compiler.CONTRACT)
+        self.assertTrue(document["job_id"].startswith("fb_"))
+
+    def test_a_route_that_cannot_take_the_plan_is_refused_before_dispatch(self):
+        with self.assertRaises(compiler.CompileRefused) as caught:
+            compiler.preset_plan("sketch-to-mesh", route="local")
+        self.assertIn("gpu", str(caught.exception))
+
+    def test_the_cost_is_on_the_plan_before_anything_runs(self):
+        document = compiler.preset_plan("animate-composition")
+        cost = document["cost"]
+        self.assertGreater(cost["gpu_minutes"], 0)
+        self.assertEqual(round(cost["gpu_minutes"] + cost["cpu_minutes"], 1),
+                         cost["total_minutes"])
+        self.assertEqual(sum(step["minutes"] for step in document["steps"]),
+                         round(document["estimate_minutes"], 2))
+        self.assertTrue(any(step["gpu"] for step in document["steps"]))
+        self.assertIn("cost:", "\n".join(compiler.summary(document)))
+
+    def test_the_board_travels_with_the_plan(self):
+        scene = board()
+        scene.apply("sketch-1", "sketch-to-mesh")
+        document = compiler.plan(scene)
+        self.assertEqual(len(document["board"]), 2)
+        self.assertEqual(document["display"]["sketch-1"]["dtype"], "mesh")
+
+
+class Routing(unittest.TestCase):
+    def test_every_route_declares_its_own_limits(self):
+        for route in routes.ROUTES.values():
+            self.assertGreater(route.ceiling_minutes, 0)
+            self.assertGreaterEqual(route.idle_kill_seconds, 0)
+            self.assertTrue(route.persistence)
+            self.assertIn(route.state, ("designed", "verified", "refused"))
+
+    def test_the_colab_route_states_its_ceiling_instead_of_hiding_it(self):
+        colab = routes.get("colab-browserbase")
+        self.assertEqual(colab.ceiling_minutes, 720)
+        self.assertEqual(colab.idle_kill_seconds, 90)
+        self.assertTrue(colab.ephemeral)
+        self.assertEqual(colab.policy, "contested")
+        self.assertIn("cookie", colab.note)
+
+    def test_nothing_here_claims_to_have_run(self):
+        for route in routes.ROUTES.values():
+            self.assertEqual(route.state, "designed", route.name)
+
+    def test_the_cheapest_route_that_fits_wins_and_brings_its_caveats(self):
+        plan = compiler.preset_plan("sketch-to-mesh")
+        route, notes = routes.choose(plan)
+        self.assertEqual(route.name, "colab-browserbase")
+        self.assertTrue(any("contested" in note for note in notes))
+
+    def test_a_plan_that_fits_a_plain_machine_stays_on_it(self):
+        plan = compiler.preset_plan("frosted-glass")
+        route, _ = routes.choose(plan)
+        self.assertEqual(route.name, "local")
+
+    def test_gates_are_only_checked_when_the_caller_has_the_environment(self):
+        plan = compiler.preset_plan("sketch-to-mesh")
+        blind = routes.fit(routes.get("colab-browserbase"), plan)
+        strict = routes.fit(routes.get("colab-browserbase"), plan, present=set())
+        self.assertEqual(blind, [])
+        self.assertTrue(any("GOOGLE_SESSION_COOKIES" in reason for reason in strict))
+
+    def test_a_job_longer_than_the_ceiling_is_routed_elsewhere(self):
+        plan = compiler.preset_plan("animate-composition")
+        long_plan = dict(plan, estimate_minutes=900)
+        reasons = routes.fit(routes.get("colab-browserbase"), long_plan)
+        self.assertTrue(any("caps at 720" in reason for reason in reasons))
+
+    def test_a_plan_that_needs_a_shell_is_refused_by_a_model_api(self):
+        plan = compiler.preset_plan("animate-composition")
+        reasons = routes.fit(routes.get("replicate"), plan)
+        self.assertTrue(any("shell" in reason for reason in reasons))
+
+
+class Jobs(unittest.TestCase):
+    def clock(self, start=1000.0):
+        ticks = [start]
+
+        def now():
+            ticks[0] += 0.0
+            return ticks[0]
+
+        now.advance = lambda seconds: ticks.__setitem__(0, ticks[0] + seconds)
+        return now
+
+    def manifest(self, plan: dict) -> dict:
+        sys.path.insert(0, str(ROOT / "kernel"))
+        import worker
+
+        return worker.run(plan, pathlib.Path(tempfile.mkdtemp()), simulate=True)
+
+    def test_a_double_click_is_one_job(self):
+        store = jobs.Store()
+        plan = compiler.preset_plan("sketch-to-mesh")
+        first, created = store.submit(plan)
+        second, created_again = store.submit(plan)
+        self.assertTrue(created)
+        self.assertFalse(created_again)
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(len(store.jobs), 1)
+
+    def test_a_store_from_another_contract_is_refused(self):
+        store = jobs.Store()
+        with self.assertRaises(jobs.JobRefused):
+            store.submit({"contract": "flowby/0", "job_id": "x"})
+
+    def test_the_life_has_legal_moves_only(self):
+        store = jobs.Store()
+        plan = compiler.preset_plan("frosted-glass")
+        job, _ = store.submit(plan)
+        with self.assertRaises(jobs.JobRefused) as caught:
+            store.complete(job.id, {"plan_digest": job.digest, "artifacts": []})
+        self.assertIn("queued", str(caught.exception))
+        store.dispatch(job.id)
+        store.start(job.id)
+        with self.assertRaises(jobs.JobRefused):
+            store.dispatch(job.id)
+
+    def test_a_payload_for_another_plan_is_refused(self):
+        store = jobs.Store()
+        plan = compiler.preset_plan("frosted-glass")
+        job, _ = store.submit(plan)
+        store.dispatch(job.id)
+        store.start(job.id)
+        with self.assertRaises(jobs.JobRefused) as caught:
+            store.complete(job.id, {"plan_digest": "fb_wrong", "artifacts": []})
+        self.assertIn("fb_wrong", str(caught.exception))
+
+    def test_a_promise_without_the_file_is_refused(self):
+        store = jobs.Store()
+        plan = compiler.preset_plan("frosted-glass")
+        job, _ = store.submit(plan)
+        store.dispatch(job.id)
+        store.start(job.id)
+        with self.assertRaises(jobs.JobRefused) as caught:
+            store.complete(job.id, {"plan_digest": job.digest, "artifacts": []})
+        self.assertIn("model-1.glb", str(caught.exception))
+
+    def test_bytes_without_a_hash_are_a_rumour(self):
+        store = jobs.Store()
+        plan = compiler.preset_plan("frosted-glass")
+        job, _ = store.submit(plan)
+        store.dispatch(job.id)
+        store.start(job.id)
+        with self.assertRaises(jobs.JobRefused) as caught:
+            store.complete(job.id, {"plan_digest": job.digest,
+                                    "artifacts": [{"name": "model-1.glb", "sha256": "nope"}]})
+        self.assertIn("rumour", str(caught.exception))
+
+    def test_a_real_manifest_completes_a_job(self):
+        store = jobs.Store()
+        plan = compiler.preset_plan("frosted-glass")
+        job, _ = store.submit(plan)
+        store.dispatch(job.id)
+        store.start(job.id)
+        store.complete(job.id, self.manifest(plan))
+        self.assertEqual(job.state, "returned")
+        self.assertEqual(job.artifacts[0]["name"], "model-1.glb")
+        self.assertEqual(len(job.artifacts), 1)
+        store.stored(job.id)
+        self.assertEqual(job.state, "stored")
+
+    def test_the_watchdog_uses_the_route_s_own_kill_line(self):
+        clock = self.clock()
+        store = jobs.Store(clock=clock)
+        plan = compiler.preset_plan("sketch-to-mesh")  # routed to colab, 90s
+        job, _ = store.submit(plan)
+        store.dispatch(job.id)
+        clock.advance(89)
+        self.assertEqual(store.stale(), [])
+        clock.advance(2)
+        self.assertEqual([j.id for j in store.stale()], [job.id])
+
+    def test_a_route_with_no_kill_line_never_goes_stale(self):
+        clock = self.clock()
+        store = jobs.Store(clock=clock)
+        plan = compiler.preset_plan("frosted-glass")  # local, no idle kill
+        job, _ = store.submit(plan)
+        store.dispatch(job.id)
+        clock.advance(86400)
+        self.assertEqual(store.stale(), [])
+
+    def test_a_heartbeat_only_lands_while_something_is_running(self):
+        store = jobs.Store()
+        plan = compiler.preset_plan("frosted-glass")
+        job, _ = store.submit(plan)
+        with self.assertRaises(jobs.JobRefused):
+            store.beat(job.id)
+        store.dispatch(job.id)
+        self.assertEqual(store.beat(job.id).beats, 1)
+
+
+class Hubs(unittest.TestCase):
+    def test_a_broadcast_reaches_every_socket_on_that_board(self):
+        hub = hubmod.Hub()
+        one = hub.open("board-1")
+        two = hub.open("board-1")
+        other = hub.open("board-2")
+        delivered = hub.broadcast("board-1", {"kind": "hello"})
+        self.assertEqual(delivered, 2)
+        self.assertEqual(one.drain(), [{"kind": "hello"}])
+        self.assertEqual(two.drain(), [{"kind": "hello"}])
+        self.assertEqual(other.drain(), [])
+
+    def test_a_socket_that_cannot_keep_up_is_closed_rather_than_skipped_past(self):
+        hub = hubmod.Hub()
+        slow = hub.open("board-1", buffer=1)
+        fast = hub.open("board-1", buffer=8)
+        hub.broadcast("board-1", {"n": 1})
+        hub.broadcast("board-1", {"n": 2})
+        self.assertFalse(slow.open)
+        self.assertEqual(slow.dropped, 1)
+        self.assertTrue(fast.open)
+        self.assertEqual([m["n"] for m in fast.drain()], [1, 2])
+
+    def test_a_reconnecting_inspector_is_handed_what_it_missed(self):
+        hub = hubmod.Hub(replay=8)
+        canvas = hub.open("board-1")
+        hub.broadcast("board-1", {"n": 1})
+        hub.broadcast("board-1", {"n": 2})
+        hub.close(canvas)
+        hub.broadcast("board-1", {"n": 3})
+        inspector = hub.open("board-1")
+        self.assertEqual([m["n"] for m in inspector.drain()], [1, 2, 3])
+
+    def test_a_fresh_board_gets_no_replay_from_another(self):
+        hub = hubmod.Hub()
+        hub.broadcast("board-1", {"n": 1})
+        self.assertEqual(hub.open("board-2").drain(), [])
+
+    def test_fresh_pixels_are_addressed_by_element(self):
+        hub = hubmod.Hub()
+        sub = hub.open("board-1")
+        hub.artifacts("board-1", "fb_1", [{"name": "sketch-1.glb", "element": "sketch-1",
+                                           "sha256": "0" * 64, "bytes": 1}])
+        message = sub.drain()[0]
+        self.assertEqual(message["kind"], "artifacts")
+        self.assertEqual(message["by_element"]["sketch-1"]["name"], "sketch-1.glb")
+
+
+class Kernel(unittest.TestCase):
+    def test_the_script_parses(self):
+        result = subprocess.run(["bash", "-n", str(ROOT / "kernel" / "kernel.sh")],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_the_dry_run_lists_the_steps_and_installs_nothing(self):
+        directory = pathlib.Path(tempfile.mkdtemp())
+        plan_file = directory / "plan.json"
+        plan_file.write_text(json.dumps(compiler.preset_plan("sketch-to-mesh")))
+        result = subprocess.run(
+            ["bash", str(ROOT / "kernel" / "kernel.sh"), "--dry-run", str(plan_file)],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("4 steps", result.stdout)
+        self.assertIn("mesh.triposr", result.stdout)
+        self.assertIn("would install: opencv-python-headless", result.stdout)
+
+    def test_the_worker_writes_a_manifest_a_job_will_accept(self):
+        directory = pathlib.Path(tempfile.mkdtemp())
+        plan = compiler.preset_plan("sketch-to-mesh")
+        plan_file = directory / "plan.json"
+        plan_file.write_text(json.dumps(plan))
+        out = directory / "out"
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "kernel" / "worker.py"),
+             "--plan", str(plan_file), "--outdir", str(out), "--simulate"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = json.loads((out / "manifest.json").read_text())
+        self.assertEqual(manifest["plan_digest"], plan["job_id"])
+        self.assertTrue(manifest["simulated"])
+        for artifact in manifest["artifacts"]:
+            body = (out / artifact["name"]).read_bytes()
+            import hashlib
+
+            self.assertEqual(hashlib.sha256(body).hexdigest(), artifact["sha256"])
+            self.assertEqual(len(body), artifact["bytes"])
+
+    def test_the_worker_refuses_a_model_it_does_not_have(self):
+        directory = pathlib.Path(tempfile.mkdtemp())
+        plan_file = directory / "plan.json"
+        plan_file.write_text(json.dumps(compiler.preset_plan("sketch-to-mesh")))
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "kernel" / "worker.py"),
+             "--plan", str(plan_file), "--outdir", str(directory / "out")],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("depth estimator", result.stderr)
+        self.assertIn("--simulate", result.stderr)
+
+
+class Alignment(unittest.TestCase):
+    def test_the_two_canvases_agree(self):
+        if not (ROOT / "web" / "tests" / "align.test.mjs").exists():
+            self.skipTest("no web tests")
+        try:
+            result = subprocess.run(
+                ["node", "--test", str(ROOT / "web" / "tests" / "align.test.mjs")],
+                capture_output=True, text=True,
+            )
+        except FileNotFoundError:
+            self.skipTest("node is not installed here")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("fail 1", result.stdout)
+
+
+class Prose(unittest.TestCase):
+    """the readme is checked against the registry, because drift is the one bug prose cannot catch."""
+
+    def test_the_readme_names_every_preset(self):
+        text = (ROOT / "readme.md").read_text()
+        for name in presets.names():
+            self.assertIn(name, text, f"readme does not mention {name}")
+
+    def test_the_directory_lists_every_path(self):
+        text = (ROOT / "directory.md").read_text()
+        for entry in ("src/", "kernel/", "app/", "web/", "tests/", "docs/", "theidea/",
+                      "journal/", "bin/"):
+            self.assertIn(entry, text, f"directory.md does not mention {entry}")
+
+    def test_the_idea_keeps_the_owner_s_brief(self):
+        text = (ROOT / "theidea" / "main.md").read_text()
+        for phrase in ("spatial layout layer", "node pipeline layer", "kernel.sh"):
+            self.assertIn(phrase, text)
+
+    def test_every_module_is_named_in_the_directory(self):
+        text = (ROOT / "directory.md").read_text()
+        for module in sorted(p.stem for p in (ROOT / "src" / "flowby").glob("*.py")):
+            if module == "__init__":
+                continue
+            self.assertIn(module, text, f"directory.md does not mention {module}.py")
+
+
+def main() -> int:
+    suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    return 0 if result.wasSuccessful() else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
