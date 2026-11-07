@@ -2,7 +2,7 @@
 
 *the seven things a user can reach for, and the one rule that keeps them from blurring*
 
-**status: proposed, not decided.** the owner named the seven kinds on 2026-11-07 (styles, tools,
+**status: proposed. one question settled (techniques are authored directly); the rest is not decided.** the owner named the seven kinds on 2026-11-07 (styles, tools,
 techniques, recipes, workflows, presets, factories later) and said vectary only has presets. the
 *ordering*, the definitions and the one rule below are this tree's reading of that list, written
 after the vectary canvas video and the fuser docs were looked at, and they have not been confirmed.
@@ -82,10 +82,76 @@ that costs real money and cannot be previewed by running a smaller version first
 
 ## what is deliberately not decided
 
-* whether a user can author a **technique** directly, or only by promoting a preset. vectary says
-  custom presets are "coming soon" for teams, which suggests they are the unit people want to make.
+* ~~whether a user can author a **technique** directly, or only by promoting a preset.~~ **decided
+  by the owner, 2026-11-07: a technique is authored directly.** so a technique is a first-class
+  entity with its own editor (an ordered list of tools plus the reason for the order), not a thing
+  that only exists once someone has built a preset around it. a preset then *references* a technique
+  instead of inlining its steps, which is the refactor in the table above.
 * whether a **recipe** can contain a **style** by value (frozen) or by reference (follows updates).
   by reference is more useful and breaks reproducibility.
 * whether the **factory** needs its own door or is a setting on a workflow.
 * the studio base44 style transfer flow, which was not seen. it is the most likely source of the
   right answer on how a style is *extracted from an upload* rather than trained.
+
+## styles: where training runs (owner's plan, 2026-11-07)
+
+the owner's proposal: do not host training. the user lends flowby their **own google colab** through
+a browserbase session they authorise, and the agent drives it. nothing runs on flowby's bill, and a
+style is trained on hardware the user already has a free allowance of.
+
+**what is claimed, and how much of it is checked** (the claims are the owner's, from r/StableDiffusion;
+the checking is a search, not a run):
+
+| claim | state |
+| --- | --- |
+| a FLUX LoRA can train on a free-tier T4 (~15gb) with fluxgym or a 4-bit qlora notebook | **supported**: fluxgym documents 12, 16 and 20gb profiles. not run here |
+| it takes **hours**, not minutes, at that size | **found, not in the claim**: one 12gb run was ~1230 steps in under 3 hours; a 16gb run was 4 hours. a colab session can be cut off before that |
+| FLUX.1-dev inference fits on a free T4 | **supported**: gguf q4/q5 variants exist for comfyui's gguf node; fp8 diffusers is the other route. not run here |
+| comfyui with gguf stacks several loras | **supported in principle**: multi-lora is a normal comfyui graph. weights per lora is what a blended style needs |
+| FLUX.1-**dev** is licensed for this | **not checked**: dev is non-commercial by default. schnell is apache-2.0. this decides which base a *sold* style can be trained against |
+
+so the claim holds, with two things it leaves out: **wall-clock time** and **session limits**. the
+free tier disconnects idle sessions and caps runtime, and a 3 to 4 hour job is exactly the kind of
+thing that gets cut off. a style trainer therefore needs to **checkpoint and resume**, or it will
+fail at hour three with nothing to show.
+
+### the shape this gives a style
+
+    upload images -> caption -> train (colab, hours, resumable) -> validate -> usable
+                                  ^
+                          the only step that is not a node
+
+training is the one step that is a *job*, not a node, and it runs on the **user's** compute. that
+makes `compute.md` two lanes instead of one: flowby's worker for generation, the user's colab for
+training. the browserbase session is the hand-off and the user authorises it.
+
+### what has to be true before this is built
+
+* **consent is per session, not once.** the agent drives a logged-in google account in a browser. the
+  user opens the live view, signs in, and can end it. flowby never holds the google credentials.
+* **colab's terms.** automated driving of colab, and long-running or heavy use on the free tier, may
+  breach google's terms and can get the account limited. this is the largest unchecked risk and it
+  falls on the *user's* account, not flowby's. it needs reading, not assuming.
+* **a fallback that is not colab.** if the session is refused or cut, the style cannot be left
+  half-trained. a resumable checkpoint in the user's drive is the minimum.
+
+## what exactly.ai shows (read from its site, not used)
+
+exactly.ai is a different business from the one assumed, and the difference is useful.
+
+* **it is not self-serve style transfer.** the pricing page sells a **custom AI workflow**: 30-minute
+  assessment, ~10 approved example images, "define what good looks like", then *their ML team builds
+  the workflow* and the customer tests it in two feedback rounds. plans are £500/month (3 month
+  pilot), £6,000/year and £60,000/year, and credits are £10 per 100.
+* **a style is delivered as a workflow, not as a slider.** the pitch is "a hundred images, one style:
+  line weight, palette and mood hold across a full campaign", plus "same face in every image" and
+  "edit a detail, keep the picture". consistency is the product, not the look.
+* **it ships a guard.** "brand guardian" checks every output against agreed brand, legal and cultural
+  rules. that is a *reviewer* attached to a style, and it is the thing the factory rung will need.
+* **it also sells the other models.** the app exposes third-party image and video models next to the
+  custom one, plus masks, background removal, vectorise, upscale and reframe. a style sits beside
+  general tools instead of replacing them, which matches the ladder.
+
+what was **not** seen: the actual training UI. it is behind a login or a sales call, and the public
+site does not show how a style is weighted or blended. "weighted, like exactly.ai" is the owner's
+description and has not been confirmed from the product.
