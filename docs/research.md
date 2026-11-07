@@ -307,6 +307,105 @@ reach one artifact or a whole project; and is `/admin/tools` per-workspace or ba
 one matters most, because a registry a customer maintains is a different product from a catalogue
 the product ships, and it would change what `presets.py` is.
 
+## fuser's clips and docs, the ones the first pass did not read (2026-11-08)
+
+the earlier pass read the sockets and flows pages. this one read the rest of docs.fuser.studio
+(fourteen interface pages, as markdown from `/docs/interface/*.md`) and downloaded every screenshot
+and clip they reference: 26 images and 41 clips, 16 minutes of the interface in motion, all
+1440x1080, all decoded and checked. four of the clips were then looked at as contact sheets (six
+frames each): the toolbar, media drop, node anatomy and style training. the rest were read through
+the prose that sits beside them and have not been watched. nothing below comes from youtube: the
+docs carry the clips themselves, so the channel was not needed for the interface.
+
+### how media gets in, which is not a panel
+
+this is the finding that most changes the panel built on 2026-11-07.
+
+* **dropping on the bare canvas is the creation action.** three files dragged from the desktop
+  became three nodes in a row, each sized to its content (a portrait is tall, a square is square),
+  with no dialog and no confirmation.
+* **a drop target shows itself before release.** dragging a file over an existing node tints that
+  node violet, and releasing replaces its content. dropping onto a *property* uploads into that
+  property.
+* **paste works too** (cmd/ctrl+v), including images copied from a web page.
+* **there is a library behind it:** an Assets tab (everything uploaded) and a Generations tab
+  (everything a node has made), both in a narrow left rail. dragging from either onto the canvas
+  or into a training panel is the same gesture.
+* the limit is 50 MB a file. formats: png, jpg, webp, gif; mp4, webm; mp3, wav; glb, gltf.
+
+### the node, seen
+
+* header with a provider icon, a title that renames on double-click (the field opens in place and
+  the header updates at once), and a menu. hovering the title shows the model's one-line description.
+* a prompt area, then one row per property, each with a coloured dot socket on the card edge and its
+  control on the right (number field, dropdown, seed with a re-roll button).
+* a faint "3 properties hidden" fold, then the output row with its own socket. the generated image
+  becomes the card body, so the node is its own preview.
+* a small action bar appears under a *selected* node only: properties, chat, focus, download, run.
+  each has a tooltip. the run button is violet and is the only saturated colour on the canvas.
+* selection is a soft violet glow and not a hard border.
+
+### the chrome
+
+* a floating pill at the bottom centre: six type icons (text, image, video, audio, mesh, 3d), a `+`,
+  and an **Execute** button that appears only when an executable node is selected.
+* the `+` opens a command bar: fuzzy search over type, provider and function, and every row shows its
+  type signature as coloured chips (`TXT + IMG -> IMG`), so what a node takes and gives is visible
+  before it is added. shift+A or cmd/ctrl+K opens it.
+* a project pill top left (double-click to rename), zoom percentage and a violet Share button top
+  right, a narrow icon rail on the left (Nodes, Assets, Generations, Styles, Templates, Learn), and a
+  context-aware properties panel that slides in on the right (shift+P).
+* errors stack at the bottom centre and expand on hover.
+* keyboard: cmd/ctrl+0 fits all, cmd/ctrl+1 fits the selection, double-click a node to zoom to it,
+  F opens focus mode (a fullscreen single node), shift+scroll pans horizontally.
+* **quick connect**: drag from a socket to empty space and a small search menu lists every
+  compatible node and property; picking one creates and wires it in a single move.
+
+### style training, seen (this is the page the style kind should be compared against)
+
+* three training modes in a segmented control: **Style**, **Object**, **Portrait**, each with a
+  one-line description. portrait requires consent from every person depicted, and a style found in
+  breach is removed.
+* a name with example placeholders, a Publish to Community toggle with its trade-off written under
+  it (published styles do not count against storage), and a reference-images drop zone that reads
+  "provide 5-15 high-quality, diverse images".
+* the button is disabled and reads "add at least 5 more images" until the minimum is met.
+* **the cost is stated before the press**: "training a style will incur a $2.4 charge to your fal
+  account". a toast then says "style training started" with a View link, and a green progress bar
+  replaces the button.
+* training takes 1 to 5 minutes, on their own GPUs.
+* **trigger words are generated and appended for you.** the user never types or sees one.
+* **every style carries a Master Prompt**: a long text description of the look, as a socket on the
+  style node. it lets a style work on models that cannot load a lora (gpt image, gemini, ideogram,
+  recraft), and it can be copied from the style card.
+* the trained style lands as a **Style node** on the canvas (reference image plus the master prompt
+  text) and quick connect wires it to a generator.
+* styles currently work only with flux dev and flux krea dev.
+
+### what this changes in flowby, and where flowby already differs on purpose
+
+| fuser, seen | flowby today | verdict |
+| --- | --- | --- |
+| dropping on the canvas creates the node | a panel with a drop zone behind a button | **wrong centre of gravity.** keep the panel as the figma door and the queue, add canvas drop and paste |
+| drop target highlights before release | none | missing |
+| paste from clipboard | none | missing |
+| assets and generations libraries | an artifacts tab designed, no assets tab, nothing built | missing |
+| cost shown before the press | cost is shown for figma imports and training plans, not on the canvas | partly there |
+| trigger words managed for you | the style gate makes the user pick a rare token and refuses ordinary words | **the gate is right for a corpus and wrong as a surface.** generate the token, keep the check as a guard on custom ones |
+| three training modes | one kind of style | missing: object and portrait, and the portrait consent gate |
+| master prompt on every style | none | missing, and cheap: it makes a style usable without a lora |
+| 5 to 15 images, 1 to 5 minutes | 10 to 30 images, 75 to 150 minutes | different on purpose: fuser trains on its own gpus, flowby on the user's colab. say so in the ui instead of copying their numbers |
+| type signature chips in the command bar | none | missing, and the type system to drive it already exists |
+| quick connect | none | missing |
+| node result as the card body | text-only card | missing |
+| execute button only when something is selected | none | missing |
+| node toolbar under a selected node | none | missing |
+
+what fuser does not have, and flowby does: a gate that refuses a bad training corpus before any
+gpu time, a stack limit with a stated reason, a font as a file kind, a preset that says whether it
+runs on a model, and routes that state what each place honestly cannot do. fuser's cost line is a
+price; flowby's is a price and a time and a way it can fail.
+
 ## the one thing both are doing and this tree is not
 
 both are moving toward **authoring presets inside the product**: vectary says custom presets are "coming soon" for teams, and fuser's recipes are already user-recorded. flowby ships six presets in a python file, which is appropriate for a tree with no accounts and no storage, and is the first thing that would have to change for a real studio to adopt it. that is named in `theidea/decisions.md` under what is not decided rather than left to be discovered.

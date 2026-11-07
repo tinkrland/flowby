@@ -8,11 +8,14 @@
  * state: designed. it bundles; nobody has panned it.
  */
 
-import { StrictMode, useEffect, useState } from "react";
+import { unzipSync } from "fflate";
+import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { NodeCanvas } from "./NodeCanvas";
 import { Panel, type PlacedElement } from "./Panel";
+import * as gesture from "./gesture.mjs";
+import * as intake from "./intake.mjs";
 
 type GraphDocument = {
   title: string;
@@ -24,6 +27,46 @@ function App() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [placed, setPlaced] = useState<PlacedElement[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const depth = useRef(0);
+
+  // what arrives by drop or paste goes through the same classification as the panel. a file that
+  // cannot be taken is reported by name, and nothing is dropped without a word.
+  const take = useCallback(async (files: { name: string; bytes: Uint8Array }[]) => {
+    const { placed: ok, refused } = gesture.takeFiles(files);
+    const elements: PlacedElement[] = [];
+    for (const f of ok) {
+      if (f.needs === "unpack") {
+        try {
+          const { files: inner } = intake.unpackZip(f.bytes, unzipSync);
+          for (const i of inner) { try { elements.push(await intake.toElement(i)); } catch { /* listed below */ } }
+        } catch (e) { refused.push({ name: f.name, reason: (e as Error).message }); }
+        continue;
+      }
+      try { elements.push(await intake.toElement(f)); } catch (e) { refused.push({ name: f.name, reason: (e as Error).message }); }
+    }
+    if (elements.length) setPlaced((all) => [...all, ...elements]);
+    setNote(
+      [elements.length ? `added ${elements.length} node${elements.length === 1 ? "" : "s"}` : "",
+        ...refused.map((r) => `${r.name}: ${r.reason}`)].filter(Boolean).join(" · ") || null,
+    );
+  }, []);
+
+  useEffect(() => {
+    const onPaste = async (e: ClipboardEvent) => {
+      const files = [...(e.clipboardData?.files ?? [])];
+      const verdict = gesture.readPaste({ files, hasText: Boolean(e.clipboardData?.getData("text")), target: e.target as HTMLElement });
+      if (verdict.silent) return;
+      e.preventDefault();
+      const now = new Date();
+      await take(await Promise.all(verdict.take.map(async (f: File, i: number) => ({
+        name: gesture.nameForPaste(f, i, now), bytes: new Uint8Array(await f.arrayBuffer()),
+      }))));
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [take]);
 
   useEffect(() => {
     fetch("/graph.json")
@@ -52,7 +95,7 @@ function App() {
         <strong>{doc.title}</strong>
         <span style={{ color: "#71717a", fontSize: 12 }}>
           {doc.pipeline.nodes.length} nodes, {doc.pipeline.wires.length} wires
-          {placed.length > 0 && `, ${placed.length} placed from the panel`}
+          {placed.length > 0 && `, ${placed.length} added by hand`}
         </span>
         <button
           onClick={() => setPanelOpen((open) => !open)}
@@ -61,8 +104,35 @@ function App() {
           new node
         </button>
       </header>
-      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+      <div
+        style={{ flex: 1, minHeight: 0, position: "relative" }}
+        onDragEnter={(e) => { if (gesture.carriesFiles(e.dataTransfer.types)) { depth.current += 1; setDragging(true); } }}
+        onDragOver={(e) => { if (gesture.carriesFiles(e.dataTransfer.types)) e.preventDefault(); }}
+        onDragLeave={() => { depth.current = Math.max(0, depth.current - 1); if (depth.current === 0) setDragging(false); }}
+        onDrop={async (e) => {
+          if (!gesture.carriesFiles(e.dataTransfer.types)) return;
+          e.preventDefault(); depth.current = 0; setDragging(false);
+          const files = await Promise.all([...e.dataTransfer.files].map(async (f) => ({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })));
+          await take(files);
+        }}
+      >
         <NodeCanvas pipeline={doc.pipeline} />
+        {dragging && (
+          <div
+            aria-hidden
+            style={{ position: "absolute", inset: 8, border: "2px dashed #a78bfa", borderRadius: 14, background: "rgba(167,139,250,0.07)", pointerEvents: "none", zIndex: 9 }}
+          >
+            {/* a pill at the top, so the label never lands on a node the way a centred one did */}
+            <span style={{ position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", background: "#121214", color: "#c4b5fd", border: "1px solid #3b2f63", borderRadius: 999, padding: "5px 14px", fontSize: 13 }}>
+              {gesture.dragState({ types: ["Files"] }).verb}
+            </span>
+          </div>
+        )}
+        {note && (
+          <div role="status" style={{ position: "absolute", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 11, background: "#121214", color: "#e4e4e7", border: "1px solid #1c1c1f", borderRadius: 10, padding: "8px 14px", fontSize: 13, maxWidth: 560 }}>
+            {note} <button onClick={() => setNote(null)} aria-label="dismiss" style={{ background: "none", border: 0, color: "#71717a", cursor: "pointer" }}>×</button>
+          </div>
+        )}
         {panelOpen && (
           <div style={{ position: "absolute", top: 12, right: 12, bottom: 12, zIndex: 10, display: "flex" }}>
             <Panel

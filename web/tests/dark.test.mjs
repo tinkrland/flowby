@@ -17,7 +17,7 @@ const read = (rel) => fs.readFileSync(path.join(here, "..", rel), "utf8");
 
 const html = read("index.html");
 const canvas = read("src/NodeCanvas.tsx");
-const sources = ["src/NodeCanvas.tsx", "src/main.tsx", "src/Panel.tsx", "index.html"].map(read).join("\n");
+const sources = ["src/NodeCanvas.tsx", "src/main.tsx", "src/Panel.tsx", "src/gesture.mjs", "index.html"].map(read).join("\n");
 
 test("the document declares itself dark to the browser", () => {
   assert.match(html, /<meta name="color-scheme" content="dark"/);
