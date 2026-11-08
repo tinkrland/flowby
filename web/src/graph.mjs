@@ -14,21 +14,24 @@
  */
 
 import dagre from "@dagrejs/dagre";
+import { CARD, cardHeight, cardOf } from "./nodeui.mjs";
 import { portStyle, wireFor } from "./wires.mjs";
 
-/** a node box, in css pixels, before dagre gets involved */
-export const NODE_W = 208;
-const HEAD_H = 46;
-const PORT_H = 18;
+/**
+ * a node box, in css pixels, before dagre gets involved. the card owns its own geometry
+ * (nodeui.CARD), and layout asks it, so the box dagre places and the card that is drawn cannot
+ * disagree about how big a node is.
+ */
+export const NODE_W = CARD.width;
 
 /**
- * how tall a node has to be for its ports to fit. react flow measures dom, but dagre needs the
- * number up front, and the number has to be the same one the handles are laid out against.
+ * how tall a node has to be. react flow measures dom, but dagre needs the number up front, and it
+ * has to be the same one the card is drawn at.
  * @param {any} node
+ * @param {{expanded?: boolean, preview?: boolean}} [options]
  */
-export function nodeHeight(node) {
-  const rows = Math.max(Object.keys(node.inputs).length, Object.keys(node.outputs).length);
-  return HEAD_H + PORT_H * Math.max(1, rows);
+export function nodeHeight(node, options = {}) {
+  return cardHeight(cardOf(node, { expanded: options.expanded }), { preview: options.preview });
 }
 
 /** stable id for a wire, so react flow can reconcile rather than remount */

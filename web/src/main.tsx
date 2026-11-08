@@ -14,8 +14,10 @@ import { createRoot } from "react-dom/client";
 
 import { NodeCanvas } from "./NodeCanvas";
 import { Panel, type PlacedElement } from "./Panel";
+import { CommandBar, Toolbar, type BarMode } from "./Chrome";
 import * as gesture from "./gesture.mjs";
 import * as intake from "./intake.mjs";
+import { commandRows, executeState } from "./nodeui.mjs";
 
 type GraphDocument = {
   title: string;
@@ -28,6 +30,10 @@ function App() {
   const [placed, setPlaced] = useState<PlacedElement[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [menu, setMenu] = useState<any[] | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bar, setBar] = useState<BarMode | null>(null);
+  const [ran, setRan] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const depth = useRef(0);
 
@@ -67,6 +73,22 @@ function App() {
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
   }, [take]);
+
+  useEffect(() => {
+    fetch("/presets.json").then((r) => (r.ok ? r.json() : null)).then((j) => setMenu(j ? (Array.isArray(j) ? j : (Object.values(j).find(Array.isArray) as any[])) : null)).catch(() => setMenu(null));
+  }, []);
+
+  // shift+A or cmd/ctrl+K opens the command bar, as in fuser, unless the user is typing somewhere
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (gesture.typing(e.target as HTMLElement)) return;
+      if ((e.shiftKey && e.key.toLowerCase() === "a") || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k")) {
+        e.preventDefault(); setBar({ kind: "all" });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     fetch("/graph.json")
@@ -116,7 +138,25 @@ function App() {
           await take(files);
         }}
       >
-        <NodeCanvas pipeline={doc.pipeline} />
+        <NodeCanvas
+          pipeline={doc.pipeline}
+          onSelect={setSelected}
+          onQuickConnect={(drop) => setBar({ kind: "connect", ...drop })}
+        />
+        <Toolbar
+          execute={executeState(selected, Object.fromEntries(doc.pipeline.nodes.map((n: any) => [n.id, n])))}
+          onExecute={() => setRan(`would run ${selected.length} node${selected.length === 1 ? "" : "s"}: the worker is not connected to this page`)}
+          onOpenBar={() => setBar({ kind: "all" })}
+          onAddType={() => setPanelOpen(true)}
+        />
+        {bar && menu && (
+          <CommandBar
+            rows={commandRows(menu)}
+            mode={bar}
+            onClose={() => setBar(null)}
+            onPick={(row) => { setNote(`${row.label}: picked from the command bar. placing it on the board is the python bridge, which is not built yet`); setBar(null); }}
+          />
+        )}
         {dragging && (
           <div
             aria-hidden
@@ -128,6 +168,7 @@ function App() {
             </span>
           </div>
         )}
+        {ran && <div role="status" style={{ position: "absolute", left: "50%", bottom: 68, transform: "translateX(-50%)", zIndex: 11, background: "#121214", color: "#a1a1aa", border: "1px solid #1c1c1f", borderRadius: 10, padding: "6px 12px", fontSize: 12 }}>{ran} <button onClick={() => setRan(null)} aria-label="dismiss" style={{ background: "none", border: 0, color: "#71717a", cursor: "pointer" }}>×</button></div>}
         {note && (
           <div role="status" style={{ position: "absolute", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 11, background: "#121214", color: "#e4e4e7", border: "1px solid #1c1c1f", borderRadius: 10, padding: "8px 14px", fontSize: 13, maxWidth: 560 }}>
             {note} <button onClick={() => setNote(null)} aria-label="dismiss" style={{ background: "none", border: 0, color: "#71717a", cursor: "pointer" }}>×</button>

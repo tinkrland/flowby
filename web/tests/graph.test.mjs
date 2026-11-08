@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { check, nodeHeight, NODE_W, toFlow } from "../src/graph.mjs";
+import { CARD } from "../src/nodeui.mjs";
 import { portStyle, WIRES, wireFor } from "../src/wires.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -124,11 +125,11 @@ test("laying the same graph out twice gives the same pixels", () => {
 });
 
 test("a node is as tall as its ports need, and never shorter than its head", () => {
-  const one = { inputs: { a: {} }, outputs: {} };
-  const five = { inputs: {}, outputs: { a: {}, b: {}, c: {}, d: {}, e: {} } };
+  const one = { inputs: { a: { dtype: "image" } }, outputs: {} };
+  const five = { inputs: {}, outputs: Object.fromEntries("abcde".split("").map((k) => [k, { dtype: "image" }])) };
   assert.ok(nodeHeight(one) > 0);
   assert.ok(nodeHeight(five) > nodeHeight(one));
-  assert.equal(NODE_W, 208);
+  assert.equal(NODE_W, CARD.width, "layout and the drawn card share one width");
 });
 
 test("a wire into a port that does not exist refuses by name", () => {

@@ -17,7 +17,7 @@ const read = (rel) => fs.readFileSync(path.join(here, "..", rel), "utf8");
 
 const html = read("index.html");
 const canvas = read("src/NodeCanvas.tsx");
-const sources = ["src/NodeCanvas.tsx", "src/main.tsx", "src/Panel.tsx", "src/gesture.mjs", "index.html"].map(read).join("\n");
+const sources = ["src/NodeCanvas.tsx", "src/main.tsx", "src/Panel.tsx", "src/Card.tsx", "src/Chrome.tsx", "src/gesture.mjs", "src/nodeui.mjs", "index.html"].map(read).join("\n");
 
 test("the document declares itself dark to the browser", () => {
   assert.match(html, /<meta name="color-scheme" content="dark"/);
@@ -58,4 +58,28 @@ test("the panel is dark too: every colour it uses is dark or an accent, and none
 test("the panel takes no theme prop and reads no system preference", () => {
   const panelSrc = read("src/Panel.tsx");
   assert.equal(/\btheme\b|matchMedia|prefers-color-scheme/.test(panelSrc.replace(/\/\*[\s\S]*?\*\//g, "")), false);
+});
+
+test("the card and the chrome are dark: every surface they draw is dark, and the only hues are wire hues and one accent", () => {
+  for (const file of ["src/Card.tsx", "src/Chrome.tsx"]) {
+    const src = read(file);
+    const luminance = (hex) => { const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+    const hex = (re) => [...src.matchAll(re)].map((m) => m[1]);
+    // luminance here is on gamma-encoded values, so #1a1a1e scores 0.10 and #333333 scores 0.2: the
+    // line between a dark interface and a light one is nowhere near either, and a pale surface
+    // (fuser's own, about 0.95) fails by a mile. a hairline is meant to be visible against its surface, so
+    // it gets a looser cap, but still has to be a dark grey and never a light line on a dark card.
+    const surfaces = hex(/(?:card|bg|hover|rowHover):\s*"#([0-9a-fA-F]{6})"/g);
+    const hairlines = hex(/line:\s*"#([0-9a-fA-F]{6})"/g);
+    assert.ok(surfaces.length >= 2, `${file} declares its surfaces`);
+    assert.ok(hairlines.length >= 1, `${file} declares its hairline`);
+    for (const h of surfaces) assert.ok(luminance(h) < 0.2, `${file}: #${h} is too light for a surface`);
+    for (const h of hairlines) assert.ok(luminance(h) < 0.3, `${file}: #${h} is too light for a hairline`);
+    assert.equal(/\btheme\b|matchMedia|prefers-color-scheme/.test(src.replace(/\/\*[\s\S]*?\*\//g, "")), false, `${file} reads a theme`);
+  }
+});
+
+test("the guard would catch a light surface: a pale card and a pale hairline both fail it", () => {
+  const luminance = (hex) => { const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  for (const pale of ["f4f4f5", "ffffff", "e4e4e7", "a1a1aa"]) assert.ok(luminance(pale) >= 0.3, `#${pale} should fail the guard`);
 });

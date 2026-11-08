@@ -22,165 +22,22 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  applyNodeChanges,
+  type NodeChange,
   getBezierPath,
   type EdgeProps,
-  type NodeProps,
   type Viewport,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { LazyMotion, domAnimation, m, useReducedMotion } from "motion/react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { cameraFromTldraw } from "./align.mjs";
-import { nodeEnter, nodeHover, wireDraw } from "./anim.mjs";
-import { NODE_W, toFlow } from "./graph.mjs";
-import { wireFor } from "./wires.mjs";
-
-const HEAD_H = 46;
-const PORT_H = 18;
+import { wireDraw } from "./anim.mjs";
+import { Card } from "./Card";
+import { toFlow } from "./graph.mjs";
 
 type Port = { dtype: string; role?: string | null; many?: boolean };
-
-/** one port, as a coloured dot with its name. the dot is the handle react flow measures. */
-function PortRow({
-  name,
-  port,
-  side,
-  index,
-}: {
-  name: string;
-  port: Port;
-  side: "in" | "out";
-  index: number;
-}) {
-  const wire = wireFor(port.dtype);
-  return (
-    <div
-      style={{
-        height: PORT_H,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: side === "in" ? "flex-start" : "flex-end",
-        gap: 6,
-        padding: side === "in" ? "0 8px 0 12px" : "0 12px 0 8px",
-        fontSize: 11,
-        color: "#a1a1aa",
-      }}
-    >
-      {side === "out" && <span>{name}</span>}
-      <span
-        title={`${wire.colour}${port.role ? ` / ${port.role}` : ""}`}
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: "50%",
-          background: wire.hex,
-          opacity: port.role ? 0.85 : 1,
-          outline: port.role ? `1px dashed ${wire.hex}` : "none",
-          outlineOffset: 2,
-        }}
-      />
-      {side === "in" && <span>{name}</span>}
-      <Handle
-        id={`${side}:${name}`}
-        type={side === "in" ? "target" : "source"}
-        position={side === "in" ? Position.Left : Position.Right}
-        style={{
-          position: "absolute",
-          top: HEAD_H + PORT_H * index + PORT_H / 2 - 4,
-          [side === "in" ? "left" : "right"]: -4,
-          width: 8,
-          height: 8,
-          background: wire.hex,
-          border: "none",
-        }}
-      />
-    </div>
-  );
-}
-
-function Shell({
-  title,
-  subtitle,
-  accent,
-  rank,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  accent: string;
-  rank: number;
-  children: React.ReactNode;
-}) {
-  const reduced = useReducedMotion() ?? false;
-  return (
-    <m.div
-      {...nodeEnter(rank, { reduced })}
-      {...nodeHover({ reduced })}
-      style={{
-        width: NODE_W,
-        borderRadius: 10,
-        border: `1px solid #27272a`,
-        borderLeft: `3px solid ${accent}`,
-        background: "#0b0b0d",
-        color: "#e4e4e7",
-        font: "500 12px/1.3 ui-sans-serif, system-ui, sans-serif",
-        overflow: "hidden",
-        willChange: "transform",
-      }}
-    >
-      <div style={{ padding: "8px 12px 6px" }}>
-        <div style={{ fontSize: 12 }}>{title}</div>
-        <div style={{ fontSize: 10, color: "#71717a", marginTop: 2 }}>
-          {subtitle}
-        </div>
-      </div>
-      {children}
-    </m.div>
-  );
-}
-
-/** a node that ran something. the wire colour on its left edge is what it passed on. */
-export function OpNode({ data }: NodeProps) {
-  const inputs = Object.entries(data.inputs as Record<string, Port>);
-  const outputs = Object.entries(data.outputs as Record<string, Port>);
-  const accent = inputs[0] ? wireFor(inputs[0][1].dtype).hex : "#52525b";
-  const swept = Object.keys(
-    (data.params as Record<string, unknown>) ?? {},
-  ).length;
-  return (
-    <Shell
-      title={String(data.label)}
-      subtitle={`${String(data.op)}${swept ? ` · ${swept} params` : ""}`}
-      accent={accent}
-      rank={Number(data.rank) || 0}
-    >
-      {inputs.map(([name, port], i) => (
-        <PortRow key={name} name={name} port={port} side="in" index={i} />
-      ))}
-      {outputs.map(([name, port], i) => (
-        <PortRow key={name} name={name} port={port} side="out" index={i} />
-      ))}
-    </Shell>
-  );
-}
-
-/** a node that is something you put on the board. no inputs: it is where a chain starts. */
-export function ElementNode({ data }: NodeProps) {
-  const outputs = Object.entries(data.outputs as Record<string, Port>);
-  return (
-    <Shell
-      title={String(data.label)}
-      subtitle={String(data.op)}
-      accent="#52525b"
-      rank={Number(data.rank) || 0}
-    >
-      {outputs.map(([name, port], i) => (
-        <PortRow key={name} name={name} port={port} side="out" index={i} />
-      ))}
-    </Shell>
-  );
-}
 
 /** one wire: a bezier in its dtype's colour, dashed when a role rides it. */
 export function WireEdge({
@@ -217,7 +74,8 @@ export function WireEdge({
   );
 }
 
-const nodeTypes = { op: OpNode, element: ElementNode };
+// both shapes are one card: what you put there and what ran on it differ in their rows, not their chrome
+const nodeTypes = { op: Card, element: Card };
 const edgeTypes = { wire: WireEdge };
 
 export type NodeCanvasProps = {
@@ -225,16 +83,37 @@ export type NodeCanvasProps = {
   pipeline: { nodes: any[]; wires: any[] };
   /** the spatial layer's camera, so the two canvases can agree about where things are. */
   onCameraChange?: (camera: { x: number; y: number; z: number }) => void;
+  /** ids of the selected nodes, so the toolbar can decide whether Execute shows. */
+  onSelect?: (ids: string[]) => void;
+  /** a drag from a socket that ended on empty space: the host opens quick connect there. */
+  onQuickConnect?: (drop: { side: "in" | "out"; dtype: string; role: string | null; x: number; y: number }) => void;
+  /** pictures to show as a card's body, by node id. */
+  previews?: Record<string, string>;
 };
 
-export function NodeCanvas({ pipeline, onCameraChange }: NodeCanvasProps) {
-  const flow = useMemo(() => toFlow(pipeline), [pipeline]);
+export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect, previews }: NodeCanvasProps) {
+  const flow = useMemo(() => {
+    const laid = toFlow(pipeline);
+    if (!previews) return laid;
+    return { ...laid, nodes: laid.nodes.map((n: any) => (previews[n.id] ? { ...n, data: { ...n.data, preview: previews[n.id] } } : n)) };
+  }, [pipeline, previews]);
+
+  // react flow is controlled here: it reports a click, a drag or a selection as a change and waits
+  // for us to apply it. with static nodes nothing ever applied them, so a click selected nothing.
+  // positions and selection are view state, so they live here and python never hears of them.
+  const [nodes, setNodes] = useState<any[]>(flow.nodes);
+  useEffect(() => {
+    // a new graph from python replaces the layout but keeps what is selected
+    setNodes((old) => flow.nodes.map((n: any) => ({ ...n, selected: old.find((o) => o.id === n.id)?.selected ?? false })));
+  }, [flow]);
+  const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((all) => applyNodeChanges(changes, all)), []);
 
   return (
     <LazyMotion features={domAnimation} strict>
       <ReactFlow
         colorMode="dark"
-        nodes={flow.nodes}
+        nodes={nodes}
+        onNodesChange={onNodesChange}
         edges={flow.edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -247,6 +126,18 @@ export function NodeCanvas({ pipeline, onCameraChange }: NodeCanvasProps) {
         // the board is the product: dragging a node is a view preference, not data, so it stays
         // local until positions are something python is willing to store
         nodesDraggable
+        onSelectionChange={({ nodes }: { nodes: { id: string }[] }) => onSelect?.(nodes.map((n) => n.id))}
+        onConnectEnd={(event: MouseEvent | TouchEvent, state: any) => {
+          // a drag that did not land on a socket is quick connect, as in fuser: the menu opens where
+          // the pointer let go and lists only what could be wired to the socket it left
+          if (state?.isValid || !state?.fromHandle) return;
+          const [side, ] = String(state.fromHandle.id).split(":");
+          const nodeData = flow.nodes.find((n: any) => n.id === state.fromNode?.id)?.data as any;
+          const port = (side === "out" ? nodeData?.outputs : nodeData?.inputs)?.[String(state.fromHandle.id).split(":")[1]];
+          if (!port) return;
+          const pt = "changedTouches" in event ? event.changedTouches[0] : (event as MouseEvent);
+          onQuickConnect?.({ side: side as "in" | "out", dtype: port.dtype, role: port.role ?? null, x: pt.clientX, y: pt.clientY });
+        }}
         onMove={(_event: unknown, viewport: Viewport) => {
           onCameraChange?.(
             cameraFromTldraw({
