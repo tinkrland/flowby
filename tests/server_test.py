@@ -77,6 +77,14 @@ class Reading(Base):
         self.assertEqual((status, body), (200, srv.menu()))
         self.assertGreater(len(body["presets"]), 20)
 
+    def test_the_kits_are_served_with_every_member_listed_and_none_runnable(self):
+        status, body, _ = self.live.call("GET", "/api/kits")
+        self.assertEqual(status, 200)
+        self.assertEqual([k["id"] for k in body["kits"]], ["analog", "textile"])
+        members = [m for k in body["kits"] for m in k["members"]]
+        self.assertEqual(len(members), 12)
+        self.assertTrue(all(m["state"] == "listed" and m["runnable"] is False for m in members))
+
     def test_an_unknown_route_is_a_404_with_a_sentence(self):
         for method in ("GET", "POST"):
             status, body, _ = self.live.call(method, "/api/nothing", body={} if method == "POST" else None)
@@ -333,6 +341,118 @@ class Strictness(Base):
         before = self.live.call("GET", "/api/board")[1]
         self.live.call("POST", "/api/value", {"instance": "ghost", "slider": "x", "value": 1})
         self.assertEqual(self.live.call("GET", "/api/board")[1]["version"], before["version"])
+
+
+class Gpus(Base):
+    """the plug, over the wire, against a real model server on loopback (which is what an ssh
+    tunnel to a rented gpu looks like from here)."""
+
+    TOKEN = "tok_live_ZzYyXx9876543210"
+
+    def setUp(self):
+        super().setUp()
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import plug_test
+        self.fake = plug_test.FakeVllm(token=self.TOKEN, models=("flux-dev", "llama-3.1-8b"))
+        self.addCleanup(self.fake.close)
+
+    def add(self, **over):
+        body = {"label": "vultr a100", "provider": "vultr", "endpoint": self.fake.url, "token": self.TOKEN, **over}
+        return self.live.call("POST", "/api/plugs/add", body)
+
+    def test_a_new_plug_is_unchecked_and_the_reply_has_no_token(self):
+        status, body, _ = self.add()
+        self.assertEqual(status, 200)
+        self.assertEqual(body["plug"]["state"], "unchecked")
+        self.assertTrue(body["plug"]["has_token"])
+        self.assertNotIn("tok_live", json.dumps(body))
+
+    def test_checking_really_asks_the_server_and_only_then_is_it_up(self):
+        pid = self.add()[1]["plug"]["id"]
+        self.assertEqual(self.fake.seen, [], "adding a plug must not touch the network")
+        status, body, _ = self.live.call("POST", "/api/plugs/check", {"id": pid})
+        self.assertEqual((status, body["plug"]["state"]), (200, "up"))
+        self.assertEqual(body["plug"]["models"], ["flux-dev", "llama-3.1-8b"])
+        self.assertEqual([s["path"] for s in self.fake.seen], ["/health", "/v1/models", "/version"])
+
+    def test_the_token_the_page_sent_is_what_the_server_received_and_never_comes_back(self):
+        pid = self.add()[1]["plug"]["id"]
+        _, checked, _ = self.live.call("POST", "/api/plugs/check", {"id": pid})
+        self.assertTrue(all(s["auth"] == f"Bearer {self.TOKEN}" for s in self.fake.seen))
+        listing = self.live.call("GET", "/api/plugs")
+        for blob in (json.dumps(checked), json.dumps(listing[1])):
+            self.assertNotIn("tok_live", blob)
+            self.assertNotIn("ZzYyXx", blob)
+
+    def test_a_wrong_token_shows_as_down_with_a_sentence_and_not_a_server_error(self):
+        pid = self.add(token="nope")[1]["plug"]["id"]
+        status, body, _ = self.live.call("POST", "/api/plugs/check", {"id": pid})
+        self.assertEqual(status, 200)
+        self.assertEqual((body["plug"]["state"], body["plug"]["detail"]), ("down", "the server refused the token"))
+
+    def test_a_plug_store_handed_to_the_server_is_the_one_it_uses(self):
+        # a server restarted with its plugs (loaded from somewhere) must show them, not an empty set
+        from flowby.plug import Plugs
+        kept = Plugs(); kept.add("already here", "gcp", "https://gpu.example.com")
+        live = Live(plugs=kept)
+        self.addCleanup(live.close)
+        listed = live.call("GET", "/api/plugs")[1]["plugs"]
+        self.assertEqual([p["label"] for p in listed], ["already here"])
+
+    def test_the_listing_names_the_providers_and_says_how_auth_is_sent(self):
+        status, body, _ = self.live.call("GET", "/api/plugs")
+        self.assertEqual(set(body["providers"]), {"vultr", "gcp", "amd", "other"})
+        self.assertIn("Bearer", body["auth"])
+        self.assertIn("not confirmed", body["auth"])
+
+    def test_a_public_http_address_is_refused_with_the_reason(self):
+        status, body, _ = self.add(endpoint="http://45.32.10.20:8000")
+        self.assertEqual(status, 422)
+        self.assertIn("in the clear", body["refused"])
+        self.assertEqual(self.live.call("GET", "/api/plugs")[1]["plugs"], [])
+
+    def test_the_metadata_address_is_refused_over_the_wire_too(self):
+        status, body, _ = self.add(endpoint="https://169.254.169.254")
+        self.assertEqual(status, 422)
+        self.assertIn("private network address", body["refused"])
+
+    def test_the_same_address_twice_is_a_422_that_names_the_first(self):
+        self.add()
+        status, body, _ = self.add(label="again")
+        self.assertEqual(status, 422)
+        self.assertIn("'vultr a100' is already plugged in", body["refused"])
+
+    def test_removing_forgets_it_and_checking_it_after_is_a_422(self):
+        pid = self.add()[1]["plug"]["id"]
+        self.assertEqual(self.live.call("POST", "/api/plugs/remove", {"id": pid})[1]["plugs"], [])
+        self.assertEqual(self.live.call("POST", "/api/plugs/check", {"id": pid})[0], 422)
+
+    def test_a_plug_survives_undo_because_a_gpu_is_not_board_state(self):
+        pid = self.add()[1]["plug"]["id"]
+        self.live.call("POST", "/api/add_text", {"text": "hello there"})
+        self.live.call("POST", "/api/undo", {})
+        self.assertEqual([p["id"] for p in self.live.call("GET", "/api/plugs")[1]["plugs"]], [pid])
+
+    def test_missing_fields_are_a_400_that_names_them(self):
+        status, body, _ = self.live.call("POST", "/api/plugs/add", {"label": "x"})
+        self.assertEqual(status, 400)
+        self.assertIn("send provider", body["refused"])
+
+    def test_every_plug_route_refuses_another_origin_and_a_form_post(self):
+        for path in ("/api/plugs/add", "/api/plugs/check", "/api/plugs/remove"):
+            self.assertEqual(self.live.call("POST", path, {"id": "x"}, headers={"Origin": "https://evil.example"})[0], 403, path)
+            self.assertEqual(self.live.call("POST", path, raw=b"id=x", headers={"Content-Type": "application/x-www-form-urlencoded"})[0], 415, path)
+        self.assertEqual(self.live.call("GET", "/api/plugs", headers={"Origin": "https://evil.example"})[0], 403)
+
+    def test_a_server_that_dies_is_down_on_the_next_check_and_comes_back_up(self):
+        pid = self.add()[1]["plug"]["id"]
+        self.assertEqual(self.live.call("POST", "/api/plugs/check", {"id": pid})[1]["plug"]["state"], "up")
+        self.fake.mode = "500"
+        down = self.live.call("POST", "/api/plugs/check", {"id": pid})[1]["plug"]
+        self.assertEqual(down["state"], "down")
+        self.assertEqual(down["models"], [])
+        self.fake.mode = "ok"
+        self.assertEqual(self.live.call("POST", "/api/plugs/check", {"id": pid})[1]["plug"]["state"], "up")
 
 
 class Weather(Base):

@@ -13,6 +13,11 @@ the surface, all of it:
     POST /api/remove             {element}
     POST /api/undo   POST /api/redo
     GET  /api/presets            the menu the command bar reads
+    GET  /api/kits               the preset kits, each member with its true state
+    GET  /api/plugs              the gpus plugged in, never with a token
+    POST /api/plugs/add          {label, provider, endpoint, token?, tunnel?}   a token goes in and never comes out
+    POST /api/plugs/check        {id}   really asks the server, the only way a plug becomes up
+    POST /api/plugs/remove       {id}
 
 what it is strict about, because it faces a browser and a browser is not a trusted caller:
 
@@ -35,6 +40,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
+from . import kits as kitmod
+from . import plug as plugmod
 from . import presets as presetmod
 from .session import Session, SessionRefused
 from .store import MAX_BYTES, StoreRefused
@@ -71,9 +78,14 @@ def menu() -> dict:
 
 
 def make_server(session: Session, host: str = "127.0.0.1", port: int = 0,
-                allow_origins: tuple[str, ...] = ()) -> ThreadingHTTPServer:
+                allow_origins: tuple[str, ...] = (), plugs: plugmod.Plugs | None = None,
+                checker=None) -> ThreadingHTTPServer:
     """a server bound to a session. port 0 picks a free one. `allow_origins` are exact origins
     (scheme, host and port) that may call it from a browser; the server's own origin always may."""
+
+    plugs = plugs if plugs is not None else plugmod.Plugs()
+    run_check = checker or plugmod.check
+    plug_lock = threading.Lock()   # one check at a time per server: a check is a network call that mutates a plug
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "flowby"
@@ -168,6 +180,10 @@ def make_server(session: Session, host: str = "127.0.0.1", port: int = 0,
                 return self._json(200, session.view())
             if path == "/api/presets":
                 return self._json(200, menu())
+            if path == "/api/plugs":
+                return self._json(200, {"plugs": plugs.all(), "providers": {k: v for k, v in plugmod.PROVIDERS.items()}, "auth": plugmod.AUTH_NOTE})
+            if path == "/api/kits":
+                return self._json(200, kitmod.menu(presets=presetmod.PRESETS))
             match = re.fullmatch(r"/api/assets/(sha256:[0-9a-f]{64})", path)
             if match:
                 try:
@@ -195,6 +211,22 @@ def make_server(session: Session, host: str = "127.0.0.1", port: int = 0,
                     return self._refuse(422, str(problem))
                 return self._json(200, {"digest": digest, "bytes": len(body)})
 
+            plug_routes = {
+                "/api/plugs/add": lambda f: self._plug_add(f),
+                "/api/plugs/check": lambda f: self._plug_check(f),
+                "/api/plugs/remove": lambda f: self._plug_remove(f),
+            }
+            if path in plug_routes:
+                fields = self._fields()
+                if fields is None:
+                    return
+                try:
+                    return self._json(200, plug_routes[path](fields))
+                except plugmod.PlugRefused as problem:
+                    return self._refuse(422, str(problem))
+                except _Missing as problem:
+                    return self._refuse(400, str(problem))
+
             routes = {
                 "/api/add_file": lambda f: session.add_file(self._need(f, "kind"), f.get("label") or "", self._need(f, "digest"), f.get("name")),
                 "/api/add_text": lambda f: session.add_text(self._need(f, "text"), f.get("label")),
@@ -217,6 +249,23 @@ def make_server(session: Session, host: str = "127.0.0.1", port: int = 0,
                 return self._refuse(422, str(problem))
             except _Missing as problem:
                 return self._refuse(400, str(problem))
+
+        def _plug_add(self, f: dict) -> dict:
+            with plug_lock:
+                made = plugs.add(self._need(f, "label"), self._need(f, "provider"), self._need(f, "endpoint"),
+                                 str(f.get("token") or ""), bool(f.get("tunnel")))
+                return {"plug": made.as_dict(), "plugs": plugs.all()}
+
+        def _plug_check(self, f: dict) -> dict:
+            with plug_lock:
+                target = plugs.get(self._need(f, "id"))
+                run_check(target)
+                return {"plug": target.as_dict(), "plugs": plugs.all()}
+
+        def _plug_remove(self, f: dict) -> dict:
+            with plug_lock:
+                plugs.remove(self._need(f, "id"))
+                return {"plugs": plugs.all()}
 
         @staticmethod
         def _need(fields: dict, key: str):

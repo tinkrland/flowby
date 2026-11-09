@@ -25,6 +25,7 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
                                 and the limits on stacking styles
     job.py                      a plan's life, its illegal moves, its artifacts, its watchdog
     hub.py                      the fan-out to every board that is open, with replay
+    kits.py                     preset kits: a shelf of styles and subtypes (analog, textile). listed until built
     store.py                    bytes by digest: content-addressed, verified on write and on read, atomic
     session.py                  the board a page talks to: every action runs on a copy, so a refusal changes nothing
     server.py                   the only file that speaks http: strict about origin, content type and size
@@ -82,3 +83,4 @@ two things are deliberately absent from `src/`. there is no database layer, so a
 a preset added to `presets.py` shows up in the sidebar, the legend, the cli, the plan and the suite without anything else being edited, because every one of those reads the same registry. that is the test of whether a module is in the right place: adding to it should not require touching the layers around it.
 
 a new wire is the one change that is not local, which is why `dtypes.py` is four lines of data and a refusal. if a fifth colour is ever right, it will be because a whole class of asset has nowhere to go, and the argument belongs in `docs/presets.md` before it belongs in code.
+\nplug.py                     plug a gpu: one address that answers like a model server, checked for real

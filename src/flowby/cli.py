@@ -91,6 +91,21 @@ def cmd_modes(args) -> int:
     return 0
 
 
+def cmd_kits(args) -> int:
+    from . import kits as kitmod
+    payload = kitmod.menu(presets=presets.PRESETS)
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    for kit in payload["kits"]:
+        print(f"{kit['label']}  ({kit['ready']} of {kit['total']} ready)  {kit['blurb']}")
+        for m in kit["members"]:
+            indent = "      " if m["parent"] else "    "
+            mark = "run" if m["runnable"] else m["state"]
+            print(f"{indent}{m['label']:18} {m['kind']:8} {mark:8} {m['blurb']}")
+    return 0
+
+
 def cmd_presets(args) -> int:
     if args.json:
         print(json.dumps(presets.legend(), indent=2))
@@ -328,6 +343,7 @@ def build_parser() -> argparse.ArgumentParser:
     subs = parser.add_subparsers(dest="command", required=True)
 
     subs.add_parser("presets", help="the preset menu").set_defaults(func=cmd_presets)
+    subs.add_parser("kits", help="the preset kits, and how far each member really is").set_defaults(func=cmd_kits)
     subs.add_parser("legend", help="the four wires").set_defaults(func=cmd_legend)
     cat = subs.add_parser("catalogue", help="the brief's tool list, and what each one became")
     cat.add_argument("--json", action="store_true")
