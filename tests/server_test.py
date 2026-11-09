@@ -1,0 +1,384 @@
+"""server_test.py: the http surface, over a real socket.
+
+the session and the store carry the rules; the server's job is to be strict about who is asking and
+how. so these tests use a real ThreadingHTTPServer on a free port and real http requests, because a
+claim like "a page in another tab cannot post to the board" is only true if a request that looks
+like one is actually refused.
+"""
+
+import http.client
+import json
+import pathlib
+import sys
+import tempfile
+import threading
+import unittest
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+
+from flowby import server as srv  # noqa: E402
+from flowby.session import Session  # noqa: E402
+from flowby.store import Store, MAX_BYTES, digest_of  # noqa: E402
+
+PNG = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc0000003010100c9fe92ef0000000049454e44ae426082")
+
+
+class Live:
+    """a board served on a free loopback port, torn down after the test."""
+
+    def __init__(self, **kwargs):
+        self.store = Store(tempfile.mkdtemp())
+        self.session = Session(self.store)
+        self.server, self.url = srv.serve_in_thread(self.session, **kwargs)
+        self.host, self.port = self.server.server_address[:2]
+
+    def call(self, method, path, body=None, headers=None, raw=None):
+        conn = http.client.HTTPConnection(self.host, self.port, timeout=10)
+        h = dict(headers or {})
+        data = raw
+        if body is not None:
+            data = json.dumps(body).encode()
+            h.setdefault("Content-Type", "application/json")
+        if data is not None:
+            h.setdefault("Content-Length", str(len(data)))
+        conn.request(method, path, body=data, headers=h)
+        r = conn.getresponse()
+        payload = r.read()
+        conn.close()
+        try:
+            parsed = json.loads(payload)
+        except ValueError:
+            parsed = payload
+        return r.status, parsed, dict(r.getheaders())
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+class Base(unittest.TestCase):
+    def setUp(self):
+        self.live = Live()
+        self.addCleanup(self.live.close)
+
+    def upload(self, data=PNG, **headers):
+        return self.live.call("POST", "/api/assets", raw=data, headers={"Content-Type": "application/octet-stream", **headers})
+
+
+class Reading(Base):
+    def test_an_empty_board_reads_as_a_whole_board(self):
+        status, body, _ = self.live.call("GET", "/api/board")
+        self.assertEqual(status, 200)
+        self.assertEqual(set(body) >= {"version", "pipeline", "board", "assets", "can_undo"}, True)
+        self.assertEqual(body["pipeline"]["nodes"], [])
+
+    def test_the_preset_menu_is_the_cli_menu_exactly(self):
+        status, body, _ = self.live.call("GET", "/api/presets")
+        self.assertEqual((status, body), (200, srv.menu()))
+        self.assertGreater(len(body["presets"]), 20)
+
+    def test_an_unknown_route_is_a_404_with_a_sentence(self):
+        for method in ("GET", "POST"):
+            status, body, _ = self.live.call(method, "/api/nothing", body={} if method == "POST" else None)
+            self.assertEqual(status, 404)
+            self.assertIn("no such route", body["refused"])
+
+    def test_there_is_no_generic_call_a_method_route(self):
+        for path in ("/api/__class__", "/api/scene", "/api/_do", "/api/store", "/", "/api", "/../etc/passwd"):
+            self.assertEqual(self.live.call("GET", path)[0], 404, path)
+
+
+class Assets(Base):
+    def test_an_upload_returns_the_digest_of_exactly_those_bytes(self):
+        status, body, _ = self.upload()
+        self.assertEqual((status, body["digest"], body["bytes"]), (200, digest_of(PNG), len(PNG)))
+
+    def test_the_same_upload_twice_is_one_file(self):
+        self.upload(); self.upload()
+        self.assertEqual(self.live.store.count(), 1)
+
+    def test_an_upload_under_a_lying_digest_is_refused_and_not_stored(self):
+        status, body, _ = self.upload(**{"X-Digest": digest_of(b"something else")})
+        self.assertEqual(status, 422)
+        self.assertIn("hash to", body["refused"])
+        self.assertEqual(self.live.store.count(), 0)
+
+    def test_an_upload_under_its_true_digest_is_accepted(self):
+        self.assertEqual(self.upload(**{"X-Digest": digest_of(PNG)})[0], 200)
+
+    def test_an_empty_upload_is_refused(self):
+        self.assertEqual(self.upload(b"")[0], 422)
+
+    def test_an_oversize_upload_is_refused_before_a_byte_is_read(self):
+        # claim a huge body and send none: if the server believed the length and waited to read it
+        # this would hang to the timeout. it must answer 413 from the header alone.
+        conn = http.client.HTTPConnection(self.live.host, self.live.port, timeout=5)
+        conn.putrequest("POST", "/api/assets")
+        conn.putheader("Content-Length", str(MAX_BYTES + 1))
+        conn.putheader("Content-Type", "application/octet-stream")
+        conn.endheaders()
+        r = conn.getresponse()
+        self.assertEqual(r.status, 413)
+        self.assertIn("MB", json.loads(r.read())["refused"])
+
+    def test_a_missing_content_length_is_refused(self):
+        conn = http.client.HTTPConnection(self.live.host, self.live.port, timeout=5)
+        conn.putrequest("POST", "/api/assets")
+        conn.endheaders()
+        self.assertEqual(conn.getresponse().status, 411)
+
+    def test_a_body_shorter_than_its_length_is_refused(self):
+        conn = http.client.HTTPConnection(self.live.host, self.live.port, timeout=3)
+        conn.putrequest("POST", "/api/assets")
+        conn.putheader("Content-Length", "100")
+        conn.endheaders()
+        conn.send(b"only ten b")
+        conn.sock.shutdown(1)
+        self.assertEqual(conn.getresponse().status, 400)
+        self.assertEqual(self.live.store.count(), 0)
+
+    def test_the_bytes_come_back_the_same_with_a_type_read_from_the_bytes(self):
+        d = self.upload()[1]["digest"]
+        status, body, headers = self.live.call("GET", f"/api/assets/{d}")
+        self.assertEqual((status, body), (200, PNG))
+        self.assertEqual(headers["Content-Type"], "image/png")
+
+    def test_the_type_comes_from_the_bytes_and_never_from_a_name(self):
+        # an html file uploaded as if it were a picture must be served as an opaque download, never as html
+        page = b"<html><script>alert(1)</script></html>"
+        d = self.upload(page, **{"Content-Type": "image/png"})[1]["digest"]
+        status, body, headers = self.live.call("GET", f"/api/assets/{d}")
+        self.assertEqual(headers["Content-Type"], "application/octet-stream")
+        self.assertEqual(headers["Content-Disposition"], "attachment")
+
+    def test_every_asset_is_served_sandboxed_and_unsniffable(self):
+        d = self.upload()[1]["digest"]
+        _, _, headers = self.live.call("GET", f"/api/assets/{d}")
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        self.assertIn("sandbox", headers["Content-Security-Policy"])
+
+    def test_an_svg_is_never_served_as_an_image_a_browser_would_run(self):
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+        d = self.upload(svg)[1]["digest"]
+        _, _, headers = self.live.call("GET", f"/api/assets/{d}")
+        self.assertNotIn("svg", headers["Content-Type"])
+
+    def test_a_missing_asset_is_a_404_by_name(self):
+        status, body, _ = self.live.call("GET", "/api/assets/sha256:" + "a" * 64)
+        self.assertEqual(status, 404)
+        self.assertIn("not in the store", body["refused"])
+
+    def test_a_path_that_is_not_a_digest_never_reaches_the_store(self):
+        for bad in ("/api/assets/../../etc/passwd", "/api/assets/sha256:" + "A" * 64, "/api/assets/sha256:abc",
+                    "/api/assets/%2e%2e%2f%2e%2e%2fetc%2fpasswd", "/api/assets/sha256:" + "a" * 64 + "/x"):
+            status, body, _ = self.live.call("GET", bad)
+            self.assertEqual(status, 404, bad)
+            # the route refuses these itself, before the store is asked. the store would refuse them
+            # too, with a different sentence, and that second wall is what a loosened route would hit,
+            # so the first wall is pinned by which sentence comes back.
+            self.assertIn("no such route", body["refused"], f"{bad} reached the store")
+
+    def test_a_corrupted_file_is_not_served(self):
+        d = self.upload()[1]["digest"]
+        hexed = d.split(":")[1]
+        (self.live.store.root / hexed[:2] / hexed[2:4] / hexed).write_bytes(b"rot")
+        status, body, _ = self.live.call("GET", f"/api/assets/{d}")
+        self.assertEqual(status, 404)
+        self.assertIn("no longer hash", body["refused"])
+
+
+class Acting(Base):
+    def add_sketch(self):
+        d = self.upload()[1]["digest"]
+        return self.live.call("POST", "/api/add_file", {"kind": "sketch", "label": "the owl", "digest": d})[1]["receipt"]["ids"][0]
+
+    def test_the_whole_flow_over_the_wire(self):
+        el = self.add_sketch()
+        status, body, _ = self.live.call("POST", "/api/apply", {"element": el, "preset": "sketch-to-mesh"})
+        self.assertEqual(status, 200)
+        self.assertGreater(len(body["pipeline"]["nodes"]), 2)
+        self.assertEqual(body["board"][0]["presets"], ["sketch-to-mesh"])
+        self.assertEqual(self.live.call("GET", "/api/board")[1]["version"], body["version"])
+
+    def test_an_added_image_has_a_preview_pointing_at_bytes_that_are_really_served(self):
+        d = self.upload()[1]["digest"]
+        el = self.live.call("POST", "/api/add_file", {"kind": "image", "label": "pic", "digest": d})[1]["receipt"]["ids"][0]
+        assets = self.live.call("GET", "/api/board")[1]["assets"]
+        self.assertEqual(assets[el], d)
+        self.assertEqual(self.live.call("GET", f"/api/assets/{assets[el]}")[2]["Content-Type"], "image/png")
+
+    def test_a_refusal_is_422_with_the_sentence_and_the_board_is_as_it_was(self):
+        el = self.add_sketch()
+        before = self.live.call("GET", "/api/board")[1]
+        status, body, _ = self.live.call("POST", "/api/apply", {"element": el, "preset": "frosted-glass"})
+        self.assertEqual(status, 422)
+        self.assertTrue(body["refused"])
+        self.assertEqual(self.live.call("GET", "/api/board")[1], before)
+
+    def test_a_file_that_was_never_uploaded_cannot_be_added(self):
+        status, body, _ = self.live.call("POST", "/api/add_file", {"kind": "image", "digest": digest_of(b"never")})
+        self.assertEqual(status, 422)
+        self.assertIn("not in the store", body["refused"])
+
+    def test_a_missing_field_is_a_400_that_names_it(self):
+        status, body, _ = self.live.call("POST", "/api/apply", {"element": "x"})
+        self.assertEqual(status, 400)
+        self.assertIn("send preset", body["refused"])
+
+    def test_undo_and_redo_over_the_wire(self):
+        el = self.add_sketch()
+        self.live.call("POST", "/api/apply", {"element": el, "preset": "sketch-to-mesh"})
+        after = self.live.call("GET", "/api/board")[1]["pipeline"]
+        undone = self.live.call("POST", "/api/undo", {})[1]
+        self.assertLess(len(undone["pipeline"]["nodes"]), len(after["nodes"]))
+        self.assertEqual(self.live.call("POST", "/api/redo", {})[1]["pipeline"], after)
+
+    def test_undo_with_nothing_to_undo_is_422(self):
+        self.assertEqual(self.live.call("POST", "/api/undo", {})[0], 422)
+
+    def test_text_remove_and_rename(self):
+        t = self.live.call("POST", "/api/add_text", {"text": "a small brass owl"})[1]["receipt"]["ids"][0]
+        self.assertEqual(self.live.call("POST", "/api/rename", {"element": t, "label": "caption"})[1]["board"][0]["label"], "caption")
+        self.assertEqual(self.live.call("POST", "/api/remove", {"element": t})[1]["board"], [])
+
+    def test_the_board_survives_a_burst_of_parallel_requests(self):
+        d = self.upload()[1]["digest"]
+        codes = []
+        def go():
+            codes.append(self.live.call("POST", "/api/add_file", {"kind": "image", "label": "x", "digest": d})[0])
+        threads = [threading.Thread(target=go) for _ in range(25)]
+        [t.start() for t in threads]; [t.join() for t in threads]
+        self.assertEqual(set(codes), {200})
+        board = self.live.call("GET", "/api/board")[1]
+        self.assertEqual(len(board["board"]), 25)
+        self.assertEqual(board["version"], 25)
+
+
+class Strictness(Base):
+    def test_a_form_post_is_refused_because_a_form_cannot_send_json(self):
+        # the shape of a request an attacker's page in another tab can make without any permission
+        for kind in ("application/x-www-form-urlencoded", "text/plain", "multipart/form-data; boundary=x"):
+            status, body, _ = self.live.call("POST", "/api/add_text", raw=b"text=hello", headers={"Content-Type": kind})
+            self.assertEqual(status, 415, kind)
+        self.assertEqual(self.live.call("GET", "/api/board")[1]["board"], [])
+
+    def test_a_request_from_another_origin_is_refused(self):
+        status, body, _ = self.live.call("POST", "/api/add_text", {"text": "hello"}, headers={"Origin": "https://evil.example"})
+        self.assertEqual(status, 403)
+        self.assertEqual(self.live.call("GET", "/api/board")[1]["board"], [])
+
+    def test_a_read_from_another_origin_is_refused_too(self):
+        self.assertEqual(self.live.call("GET", "/api/board", headers={"Origin": "https://evil.example"})[0], 403)
+
+    def test_an_upload_from_another_origin_is_refused_and_not_stored(self):
+        self.assertEqual(self.upload(**{"Origin": "https://evil.example"})[0], 403)
+        self.assertEqual(self.live.store.count(), 0)
+
+    def test_the_servers_own_origin_is_allowed(self):
+        own = f"http://{self.live.host}:{self.live.port}"
+        self.assertEqual(self.live.call("GET", "/api/board", headers={"Origin": own})[0], 200)
+
+    def test_a_listed_origin_is_allowed_and_nothing_else_is(self):
+        live = Live(allow_origins=("http://localhost:5173",))
+        self.addCleanup(live.close)
+        ok = live.call("GET", "/api/board", headers={"Origin": "http://localhost:5173"})
+        self.assertEqual(ok[0], 200)
+        self.assertEqual(ok[2]["Access-Control-Allow-Origin"], "http://localhost:5173")
+        self.assertEqual(live.call("GET", "/api/board", headers={"Origin": "http://localhost:5174"})[0], 403)
+        self.assertEqual(live.call("GET", "/api/board", headers={"Origin": "http://localhost:5173.evil.example"})[0], 403)
+
+    def test_a_refused_origin_is_never_echoed_back_as_allowed(self):
+        _, _, headers = self.live.call("GET", "/api/board", headers={"Origin": "https://evil.example"})
+        self.assertNotIn("Access-Control-Allow-Origin", headers)
+
+    def test_preflight_from_an_unlisted_origin_is_refused(self):
+        self.assertEqual(self.live.call("OPTIONS", "/api/add_text", headers={"Origin": "https://evil.example"})[0], 403)
+
+    def test_preflight_from_a_listed_origin_allows_json_and_only_what_is_used(self):
+        live = Live(allow_origins=("http://localhost:5173",))
+        self.addCleanup(live.close)
+        status, _, h = live.call("OPTIONS", "/api/add_text", headers={"Origin": "http://localhost:5173"})
+        self.assertEqual(status, 204)
+        self.assertEqual(h["Access-Control-Allow-Methods"], "GET, POST, OPTIONS")
+        self.assertEqual(h["Access-Control-Allow-Headers"], "Content-Type")
+
+    def test_malformed_json_is_a_400_and_not_a_traceback(self):
+        status, body, _ = self.live.call("POST", "/api/add_text", raw=b"{not json", headers={"Content-Type": "application/json"})
+        self.assertEqual(status, 400)
+        self.assertEqual(self.live.call("POST", "/api/add_text", raw=b"[1,2]", headers={"Content-Type": "application/json"})[0], 400)
+
+    def test_a_huge_json_body_is_refused_from_its_length(self):
+        conn = http.client.HTTPConnection(self.live.host, self.live.port, timeout=5)
+        conn.putrequest("POST", "/api/add_text")
+        conn.putheader("Content-Length", str(srv.JSON_LIMIT + 1))
+        conn.putheader("Content-Type", "application/json")
+        conn.endheaders()
+        self.assertEqual(conn.getresponse().status, 413)
+
+    def test_every_response_says_not_to_cache_and_not_to_sniff(self):
+        for path in ("/api/board", "/api/presets", "/api/nothing"):
+            _, _, h = self.live.call("GET", path)
+            self.assertEqual(h["Cache-Control"], "no-store")
+            self.assertEqual(h["X-Content-Type-Options"], "nosniff")
+
+    def test_the_server_does_not_announce_its_python_version(self):
+        _, _, h = self.live.call("GET", "/api/board")
+        self.assertNotIn("Python", h.get("Server", ""))
+
+    def test_the_default_is_loopback_only(self):
+        self.assertTrue(self.live.server.flowby_loopback)
+        self.assertEqual(self.live.host, "127.0.0.1")
+
+    def test_an_unexpected_error_in_a_route_does_not_corrupt_the_board(self):
+        before = self.live.call("GET", "/api/board")[1]
+        self.live.call("POST", "/api/value", {"instance": "ghost", "slider": "x", "value": 1})
+        self.assertEqual(self.live.call("GET", "/api/board")[1]["version"], before["version"])
+
+
+class Weather(Base):
+    def test_a_client_that_vanishes_mid_request_prints_nothing(self):
+        import io, contextlib
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            for _ in range(5):
+                conn = http.client.HTTPConnection(self.live.host, self.live.port, timeout=3)
+                conn.putrequest("POST", "/api/assets")
+                conn.putheader("Content-Length", "5000")
+                conn.endheaders()
+                conn.send(b"half")
+                conn.sock.close()           # a closed tab: no shutdown, just gone
+            import time; time.sleep(0.3)
+        self.assertEqual(err.getvalue(), "", "a client leaving is not an error worth a traceback")
+        self.assertEqual(self.live.call("GET", "/api/board")[0], 200, "and the server is still up")
+
+    def test_a_real_error_in_a_handler_is_still_reported(self):
+        import io, contextlib
+        err = io.StringIO()
+        class Boom(Exception):
+            pass
+        real = self.live.session.view
+        self.live.session.view = lambda *a, **k: (_ for _ in ()).throw(Boom("a genuine bug"))
+        with contextlib.redirect_stderr(err):
+            try:
+                self.live.call("GET", "/api/board")
+            except Exception:
+                pass
+            import time; time.sleep(0.2)
+        self.live.session.view = real
+        self.assertIn("Boom", err.getvalue(), "only disconnects are quiet; a real fault must still show")
+
+
+class Content(unittest.TestCase):
+    def test_the_sniffer_knows_each_type_by_its_bytes(self):
+        self.assertEqual(srv.content_type(PNG), "image/png")
+        self.assertEqual(srv.content_type(b"\xff\xd8\xff\xe0abc"), "image/jpeg")
+        self.assertEqual(srv.content_type(b"GIF89a"), "image/gif")
+        self.assertEqual(srv.content_type(b"RIFF\0\0\0\0WEBPVP8 "), "image/webp")
+        self.assertEqual(srv.content_type(b"\0\0\0\x18ftypmp42"), "video/mp4")
+        self.assertEqual(srv.content_type(b"glTF\x02\0\0\0"), "model/gltf-binary")
+        self.assertEqual(srv.content_type(b"<svg></svg>"), "application/octet-stream")
+        self.assertEqual(srv.content_type(b""), "application/octet-stream")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -25,6 +25,9 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
                                 and the limits on stacking styles
     job.py                      a plan's life, its illegal moves, its artifacts, its watchdog
     hub.py                      the fan-out to every board that is open, with replay
+    store.py                    bytes by digest: content-addressed, verified on write and on read, atomic
+    session.py                  the board a page talks to: every action runs on a copy, so a refusal changes nothing
+    server.py                   the only file that speaks http: strict about origin, content type and size
     cli.py                      the terminal view of a board
   kernel/
     kernel.sh                   what runs inside the disposable container: env, beats, steps, tar

@@ -1353,6 +1353,10 @@ class Prose(unittest.TestCase):
 
 def main() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
+    # a new area gets its own file named *_test.py beside this one and is picked up here, so this
+    # file stops growing and `python3 tests/selftest.py` stays the one command that runs everything
+    for extra in sorted(pathlib.Path(__file__).parent.glob("*_test.py")):
+        suite.addTests(unittest.defaultTestLoader.loadTestsFromName(extra.stem))
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     return 0 if result.wasSuccessful() else 1
 
