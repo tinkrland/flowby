@@ -406,6 +406,78 @@ gpu time, a stack limit with a stated reason, a font as a file kind, a preset th
 runs on a model, and routes that state what each place honestly cannot do. fuser's cost line is a
 price; flowby's is a price and a time and a way it can fail.
 
+## fuser's docs screenshots, looked at (2026-11-09)
+
+the last pass downloaded all 26 stills and watched 4 of 41 clips. this one looked at the stills: the
+interface overview, the properties panel, the left asset panel, the gallery browse and recipe pages,
+the socket diagrams, and the six node types. each was cropped to a readable size first, because a
+tall contact sheet scaled into a viewport is too small to read, and the first look at the overview was
+exactly that. the clips beyond the four are still unwatched.
+
+### the properties panel is the node seen larger, with sections
+
+* a header with a panel toggle, a **zoom dropdown** and the Share button. zoom lives in the panel, not
+  floating on the canvas.
+* **named sections with a fold dash**: Content, Settings, Advanced. so folding is by group, and
+  "3 properties hidden" on the card is the same idea compressed.
+* every property keeps its **socket dot inside the panel**, so the panel is still a place to wire from.
+* the **result sits inline** between the prompt and the negative prompt, with a Download button under it.
+* controls: a filled text area for prompts, a number field with a re-roll `R` for the seed, plain fields
+  for steps and scale, and a **toggle switch** for a boolean.
+
+### the asset panel
+
+* a floating, rounded panel with a gap from the canvas edge, not docked. a project title and collapse
+  toggle at the top, a slim icon rail down its left edge, the active icon marked by a violet bar.
+* Assets is a **two-column thumbnail grid**, each image in a dashed-border cell, with a refresh icon.
+* a **storage meter is pinned to the bottom, always visible**: "Using 3GB of 4GB", 78%, an amber to
+  violet bar. the quota is never hidden behind a settings page.
+
+### the node types, empty and filled
+
+* image, video, audio and mesh are each a **pair**: an empty node that is a drop zone ("Drop your image
+  here, or" plus a `select a file` button) and a separate **borderless media-only node** once filled.
+  video gets a scrubber and transport controls, audio a waveform, mesh a lit render.
+* **the empty node is the creation tool.** the toolbar's type icons make empty nodes; dropping on the bare
+  canvas is the shortcut around that. flowby has the shortcut and not the empty node.
+* a style node shows a cover image, its name and tagline, then the Master Prompt text, with a labelled
+  Master Prompt output socket.
+* socket colours: text orange, image green, video blue, audio magenta, mesh red.
+
+### sockets, drawn
+
+* a circle is one connection and a tall pill is many. an **unconnected output is drawn dim**, a connected
+  one is bright, so an idle port is visible without a label. flowby draws every socket the same.
+* a triangle is a passthrough and sits on the output side.
+* **many-to-one**: three images wire into one pill on a chat node, and the wires bundle where they meet.
+  the chat node prints its answer as its body.
+* **one-to-many**: one text node fans out to three generators of equal width, stacked and aligned, each
+  showing its prompt socket, "8 properties hidden" and its image as the body.
+* cards are near-black with **no border**, about a 12px radius, on a slightly lighter canvas with a faint
+  dot grid. contrast does the separating. flowby cards have a 1px line.
+
+### the gallery and a recipe page (the chrome around the canvas is light)
+
+* the gallery is pale: a warm white page, a peach glow, a huge black display heading. this is where
+  fuser's own surfaces are light, so it is not copied. flowby stays dark.
+* structure worth keeping: a top bar with the title, a **centred pill search**, then Import project
+  (outlined) and New project (filled). a featured hero with a label, author, a two-line description, and
+  **View recipe** (primary) beside **Try it** (secondary). five variants of one input shown as vertical
+  slices side by side with prev and next arrows.
+* **a recipe page is Description, Inputs, Outputs**: inputs and outputs are small cards, each a thumbnail,
+  a name and a type. it describes a workflow by what it takes and gives, with real pictures.
+  flowby's command bar says `IMG -> 3D` and has no example media to show, and inventing thumbnails would
+  be dishonest, so this waits until presets have actually been run.
+
+### what to build from this, in order
+
+1. borderless cards with a dot-grid canvas, and dim idle sockets (small, visible at once).
+2. the **empty media node**: a drop zone that is also the toolbar's creation action.
+3. a **properties panel** with named sections, inline result, and re-roll on seeds.
+4. an **assets panel** with the dashed thumbnail grid and an always-visible quota meter. flowby's quota
+   is the store's size, which it can actually report.
+5. zoom in the panel header.
+
 ## the one thing both are doing and this tree is not
 
 both are moving toward **authoring presets inside the product**: vectary says custom presets are "coming soon" for teams, and fuser's recipes are already user-recorded. flowby ships six presets in a python file, which is appropriate for a tree with no accounts and no storage, and is the first thing that would have to change for a real studio to adopt it. that is named in `theidea/decisions.md` under what is not decided rather than left to be discovered.
