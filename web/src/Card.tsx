@@ -15,7 +15,7 @@ import { m, useReducedMotion } from "motion/react";
 import { useState } from "react";
 
 import { nodeEnter, nodeHover } from "./anim.mjs";
-import { CARD, SOCKET, actionsFor, cardOf } from "./nodeui.mjs";
+import { CARD, SOCKET, actionsFor, cardOf, socketOpacity } from "./nodeui.mjs";
 import type { CardRow } from "./nodeui.mjs";
 
 const N = {
@@ -46,6 +46,7 @@ function Socket({ row, side, top }: { row: Row; side: "in" | "out"; top: number 
         height: shape.h,
         borderRadius: shape.w,
         background: row.hex,
+        opacity: socketOpacity(row),
         border: `2px solid ${N.card}`,
         // a role rides the wire, so the socket is hollow-ringed to say it is not a plain image
         boxShadow: row.role ? `0 0 0 1px ${row.hex}` : "none",
@@ -84,7 +85,7 @@ export function Card({ id, data, selected }: NodeProps) {
   const preview = (data.preview as string | undefined) ?? undefined;
   const card = cardOf(
     { id, op: String(data.op), label: String(data.label), inputs: data.inputs as any, outputs: data.outputs as any, params: data.params as any },
-    { expanded: open },
+    { expanded: open, connected: new Set((data.connected as string[] | undefined) ?? []) },
   );
   const actions = actionsFor({ op: String(data.op) } as any);
   let y = CARD.head;
@@ -98,7 +99,11 @@ export function Card({ id, data, selected }: NodeProps) {
         width: CARD.width,
         borderRadius: 12,
         background: N.card,
-        border: `1px solid ${selected ? "rgba(167,139,250,0.5)" : N.line}`,
+        // no border at rest: the card is separated from the canvas by contrast alone, as in fuser.
+        // selection is a ring, so it is the only thing on the canvas that has an outline.
+        border: "1px solid transparent",
+        outline: selected ? "1px solid rgba(167,139,250,0.55)" : "none",
+        outlineOffset: 1,
         boxShadow: selected ? `0 0 0 3px rgba(167,139,250,0.12), 0 8px 28px ${N.glow.replace("0.55", "0.18")}` : "none",
         color: N.text,
         font: "500 12px/1.3 ui-sans-serif, system-ui, sans-serif",

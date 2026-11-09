@@ -149,3 +149,23 @@ test("two wires of the same shape are one wire, so the second is refused", () =>
   doubled.wires.push(structuredClone(tiny.wires[0]));
   assert.throws(() => check(doubled), /two wires share the shape/);
 });
+
+test("a one-row chain of cards fits a laptop viewport at a zoom where property rows stay legible", () => {
+  const { pipeline } = graphJson();
+  const flow = toFlow(pipeline);
+  const xs = flow.nodes.map((n) => n.position.x), x2 = flow.nodes.map((n) => n.position.x + n.width);
+  const width = Math.max(...x2) - Math.min(...xs);
+  const fit = 1200 / width;
+  // 0.63 was the zoom at the old 104px column gap, and at that size 11px row text is about 7px.
+  assert.ok(fit >= 0.7, `the live board fits at ${fit.toFixed(2)}x, which is too small to read`);
+});
+
+test("columns are far enough apart for a wire to curve, so tightening the layout cannot flatten them", () => {
+  const { pipeline } = graphJson();
+  const flow = toFlow(pipeline);
+  const by = Object.fromEntries(flow.nodes.map((n) => [n.id, n]));
+  for (const e of flow.edges) {
+    const gap = by[e.target].position.x - (by[e.source].position.x + by[e.source].width);
+    assert.ok(gap >= 40, `${e.id} spans only ${gap}px, which is not enough to draw a curve`);
+  }
+});

@@ -30,12 +30,13 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { LazyMotion, domAnimation, m, useReducedMotion } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { cameraFromTldraw } from "./align.mjs";
 import { wireDraw } from "./anim.mjs";
 import { Card } from "./Card";
 import { toFlow } from "./graph.mjs";
+import { frameNode } from "./nodeui.mjs";
 
 type Port = { dtype: string; role?: string | null; many?: boolean };
 
@@ -86,12 +87,17 @@ export type NodeCanvasProps = {
   /** ids of the selected nodes, so the toolbar can decide whether Execute shows. */
   onSelect?: (ids: string[]) => void;
   /** a drag from a socket that ended on empty space: the host opens quick connect there. */
+  /** double-click a node to zoom to it, as fuser does. the canvas does the zoom; this is for the host to know. */
+  onFocusNode?: (id: string) => void;
   onQuickConnect?: (drop: { side: "in" | "out"; dtype: string; role: string | null; x: number; y: number }) => void;
   /** pictures to show as a card's body, by node id. */
   previews?: Record<string, string>;
 };
 
-export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect, previews }: NodeCanvasProps) {
+export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect, onFocusNode, previews }: NodeCanvasProps) {
+  // only the one method used, so the ref does not depend on the library's generics over our edge shape
+  const instance = useRef<{ setViewport: (viewport: { x: number; y: number; zoom: number }, options?: { duration?: number }) => unknown } | null>(null);
+  const pane = useRef<HTMLDivElement | null>(null);
   const flow = useMemo(() => {
     const laid = toFlow(pipeline);
     if (!previews) return laid;
@@ -111,6 +117,7 @@ export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect,
   return (
     <LazyMotion features={domAnimation} strict>
       <ReactFlow
+        ref={pane}
         colorMode="dark"
         nodes={nodes}
         onNodesChange={onNodesChange}
@@ -118,6 +125,19 @@ export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect,
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
+        fitViewOptions={{ padding: 0.08 }}
+        zoomOnDoubleClick={false}
+        onInit={(rf) => { instance.current = rf; }}
+        onNodeDoubleClick={(_e: unknown, node: { id: string }) => {
+          // frame the card: the camera is computed from the box dagre gave it, not asked of fitView
+          const target = nodes.find((n) => n.id === node.id);
+          const size = pane.current?.getBoundingClientRect();
+          if (target && size && instance.current) {
+            const camera = frameNode({ x: target.position.x, y: target.position.y, width: target.width, height: target.height }, { width: size.width, height: size.height });
+            instance.current.setViewport(camera, { duration: 320 });
+          }
+          onFocusNode?.(node.id);
+        }}
         minZoom={0.15}
         maxZoom={2}
         snapToGrid
@@ -149,10 +169,10 @@ export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect,
         }}
       >
         <Background
-          variant={BackgroundVariant.Lines}
-          gap={24}
-          size={1}
-          color="#1c1c1f"
+          variant={BackgroundVariant.Dots}
+          gap={22}
+          size={1.2}
+          color="#26262a"
         />
         <Controls showInteractive={false} />
         <MiniMap

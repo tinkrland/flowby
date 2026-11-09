@@ -60,9 +60,9 @@ export function isTunable(name, value) {
  * rows. rows keep a stable order, inputs then properties then outputs, so a card never reshuffles
  * when a value changes.
  */
-export function cardOf(node, { expanded = false, visible = VISIBLE_PARAMS } = {}) {
-  const inputs = Object.entries(node.inputs ?? {}).map(([name, port]) => row("in", name, port));
-  const outputs = Object.entries(node.outputs ?? {}).map(([name, port]) => row("out", name, port));
+export function cardOf(node, { expanded = false, visible = VISIBLE_PARAMS, connected = new Set() } = {}) {
+  const inputs = Object.entries(node.inputs ?? {}).map(([name, port]) => row("in", name, port, connected.has(`in:${name}`)));
+  const outputs = Object.entries(node.outputs ?? {}).map(([name, port]) => row("out", name, port, connected.has(`out:${name}`)));
   const tunables = Object.entries(node.params ?? {}).filter(([n, v]) => isTunable(n, v));
   const shown = expanded ? tunables : tunables.slice(0, visible);
   const properties = shown.map(([name, value]) => ({ side: "prop", name, value: formatValue(value), raw: value }));
@@ -80,11 +80,32 @@ export function cardOf(node, { expanded = false, visible = VISIBLE_PARAMS } = {}
   };
 }
 
-function row(side, name, port) {
+function row(side, name, port, connected) {
   return {
     side, name, dtype: port.dtype, role: port.role ?? null,
-    shape: socketShape(port), hex: wireFor(port.dtype).hex,
+    shape: socketShape(port), hex: wireFor(port.dtype).hex, connected,
   };
+}
+
+/**
+ * which ports on which nodes have a wire, as `node -> Set("in:name" | "out:name")`. fuser draws an
+ * unconnected output dim and a connected one bright, so an idle port is visible without a label.
+ * a required input with nothing wired to it is the same fact seen from the other side.
+ */
+export function connectedPorts(pipeline) {
+  const map = new Map();
+  const mark = (node, key) => { if (!map.has(node)) map.set(node, new Set()); map.get(node).add(key); };
+  for (const w of pipeline.wires ?? []) {
+    mark(w.from.node, `out:${w.from.port}`);
+    mark(w.to.node, `in:${w.to.port}`);
+  }
+  return map;
+}
+
+/** how opaque a socket is drawn. idle is dim but still findable, since you have to be able to drag from it. */
+export const IDLE_OPACITY = 0.38;
+export function socketOpacity(row) {
+  return row.connected ? 1 : IDLE_OPACITY;
 }
 
 /**
@@ -180,4 +201,25 @@ export function quickConnect(rows, { side, dtype, role = null }) {
   const key = side === "out" ? "from" : "to";
   const out = rows.filter((r) => r.signature[key] === dtype);
   return { side, dtype, role, options: out, empty: out.length === 0 ? `nothing takes ${dtype} here` : null };
+}
+
+// --- zooming to a node ---------------------------------------------------------------------------
+
+/**
+ * the camera that frames one node: centred in the pane, at a zoom where the card takes up about
+ * `fill` of the pane's shorter side, never past `maxZoom` and never below `minZoom`. fuser's
+ * double-click does this. it is computed here and applied with setViewport, because fitView on a
+ * node list uses measured bounds and did not move the camera for cards laid out by dagre.
+ */
+export function frameNode(box, pane, { fill = 0.5, minZoom = 0.15, maxZoom = 1.4 } = {}) {
+  if (!(box?.width > 0) || !(box?.height > 0) || !(pane?.width > 0) || !(pane?.height > 0)) {
+    throw new Error("frameNode needs a box and a pane with a size");
+  }
+  const wanted = Math.min((pane.width * fill) / box.width, (pane.height * fill) / box.height);
+  const zoom = Math.min(maxZoom, Math.max(minZoom, wanted));
+  return {
+    zoom,
+    x: pane.width / 2 - (box.x + box.width / 2) * zoom,
+    y: pane.height / 2 - (box.y + box.height / 2) * zoom,
+  };
 }

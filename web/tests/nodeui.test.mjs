@@ -13,6 +13,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as ui from "../src/nodeui.mjs";
+import { toFlow } from "../src/graph.mjs";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const flowby = (...args) => JSON.parse(execFileSync(path.join(root, "bin", "flowby"), ["--json", ...args], { encoding: "utf8" }));
@@ -249,4 +250,100 @@ test("a node with no op still gets a card, so layout never crashes on a half-bui
   assert.equal(card.isElement, false);
   assert.equal(card.inputs.length, 1);
   assert.equal(ui.runnable({ id: "n" }), true);
+});
+
+// --- idle and connected sockets: fuser draws an unwired port dim and a wired one bright ---------
+
+test("a port is connected exactly when a wire in the real graph touches it", () => {
+  const { pipeline } = graph;
+  const wired = ui.connectedPorts(pipeline);
+  let touched = 0;
+  for (const w of pipeline.wires) {
+    assert.ok(wired.get(w.from.node).has(`out:${w.from.port}`), `${w.from.node}.${w.from.port} should be connected`);
+    assert.ok(wired.get(w.to.node).has(`in:${w.to.port}`), `${w.to.node}.${w.to.port} should be connected`);
+    touched += 2;
+  }
+  assert.ok(touched > 0, "the real graph has wires to check");
+  // and nothing else: count every port on every node and compare
+  const total = [...wired.values()].reduce((n, set) => n + set.size, 0);
+  const distinct = new Set(pipeline.wires.flatMap((w) => [`${w.from.node}|out:${w.from.port}`, `${w.to.node}|in:${w.to.port}`])).size;
+  assert.equal(total, distinct);
+});
+
+test("a port nothing is wired to is idle, and the real graph has some", () => {
+  const { pipeline } = graph;
+  const wired = ui.connectedPorts(pipeline);
+  let idle = 0;
+  for (const node of pipeline.nodes) {
+    const card = ui.cardOf(node, { connected: wired.get(node.id) ?? new Set() });
+    for (const r of [...card.inputs, ...card.outputs]) if (!r.connected) idle += 1;
+  }
+  assert.ok(idle > 0, "a board with every port wired would make this test meaningless");
+});
+
+test("a card marks its own rows connected from the set it is given, and idle without one", () => {
+  const node = { id: "n", op: "x.y", label: "n", inputs: { a: { dtype: "image" } }, outputs: { out: { dtype: "image" } } };
+  const wired = ui.cardOf(node, { connected: new Set(["in:a"]) });
+  assert.equal(wired.inputs[0].connected, true);
+  assert.equal(wired.outputs[0].connected, false);
+  assert.equal(ui.cardOf(node).inputs[0].connected, false, "no set means nothing is wired");
+});
+
+test("a connected socket is fully opaque and an idle one is dim but still visible enough to drag from", () => {
+  assert.equal(ui.socketOpacity({ connected: true }), 1);
+  const idle = ui.socketOpacity({ connected: false });
+  assert.ok(idle < 1, "idle must read differently from connected");
+  assert.ok(idle >= 0.3, "idle must stay findable, since a port you cannot see is a port you cannot drag from");
+});
+
+test("an input and an output with the same name on one node are tracked separately", () => {
+  const wired = ui.connectedPorts({ wires: [{ from: { node: "a", port: "out" }, to: { node: "b", port: "out" } }] });
+  assert.deepEqual([...wired.get("a")], ["out:out"]);
+  assert.deepEqual([...wired.get("b")], ["in:out"]);
+});
+
+test("toFlow hands every card the ports that are wired to it, as plain arrays", async () => {
+  const { toFlow } = await import("../src/graph.mjs");
+  const { pipeline } = graph;
+  const flow = toFlow(pipeline);
+  const w = pipeline.wires[0];
+  const src = flow.nodes.find((n) => n.id === w.from.node);
+  assert.ok(Array.isArray(src.data.connected));
+  assert.ok(src.data.connected.includes(`out:${w.from.port}`));
+  JSON.stringify(flow.nodes.map((n) => n.data));   // survives serialisation: no Set in props
+});
+
+// --- zooming to a node: fuser's double-click ---------------------------------------------------
+
+test("framing a node centres it in the pane", () => {
+  const box = { x: 400, y: 120, width: 232, height: 140 };
+  const pane = { width: 1200, height: 700 };
+  const cam = ui.frameNode(box, pane);
+  const screenX = box.x * cam.zoom + cam.x + (box.width * cam.zoom) / 2;
+  const screenY = box.y * cam.zoom + cam.y + (box.height * cam.zoom) / 2;
+  assert.ok(Math.abs(screenX - 600) < 0.001 && Math.abs(screenY - 350) < 0.001, `centre lands at ${screenX},${screenY}`);
+});
+
+test("a card takes about half the pane when framed, and the zoom is clamped both ways", () => {
+  // a box wide enough that the 1.4 cap does not bite: 900 wide wants 600/900 = 0.667x, so it fills half the width
+  const cam = ui.frameNode({ x: 0, y: 0, width: 900, height: 300 }, { width: 1200, height: 700 }, { fill: 0.5 });
+  assert.ok(Math.abs(900 * cam.zoom - 600) < 1, `fills half the pane width, got ${900 * cam.zoom}`);
+  // and an ordinary 232px card in this pane is capped, not stretched to fill it
+  assert.equal(ui.frameNode({ x: 0, y: 0, width: 232, height: 140 }, { width: 1200, height: 700 }).zoom, 1.4);
+  assert.equal(ui.frameNode({ x: 0, y: 0, width: 10, height: 10 }, { width: 1200, height: 700 }).zoom, 1.4, "a tiny card is not blown up past the maximum");
+  assert.equal(ui.frameNode({ x: 0, y: 0, width: 90000, height: 90000 }, { width: 1200, height: 700 }).zoom, 0.15, "a huge one is not shrunk below the minimum");
+});
+
+test("framing refuses a box or pane with no size instead of returning NaN", () => {
+  for (const [box, pane] of [[{ x: 0, y: 0, width: 0, height: 10 }, { width: 100, height: 100 }], [{ x: 0, y: 0, width: 10, height: 10 }, { width: 0, height: 100 }], [undefined, { width: 1, height: 1 }]]) {
+    assert.throws(() => ui.frameNode(box, pane), /needs a box and a pane with a size/);
+  }
+});
+
+test("framing the real board's nodes gives a finite camera for every one", () => {
+  const flow = toFlow(graph.pipeline);
+  for (const n of flow.nodes) {
+    const cam = ui.frameNode({ x: n.position.x, y: n.position.y, width: n.width, height: n.height }, { width: 1200, height: 700 });
+    assert.ok([cam.x, cam.y, cam.zoom].every(Number.isFinite), n.id);
+  }
 });

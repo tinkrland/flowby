@@ -14,7 +14,7 @@
  */
 
 import dagre from "@dagrejs/dagre";
-import { CARD, cardHeight, cardOf } from "./nodeui.mjs";
+import { CARD, cardHeight, cardOf, connectedPorts } from "./nodeui.mjs";
 import { portStyle, wireFor } from "./wires.mjs";
 
 /**
@@ -80,7 +80,9 @@ export function check(pipeline) {
  */
 export function toFlow(pipeline, options = {}) {
   check(pipeline);
-  const { rankdir = "LR", nodesep = 26, ranksep = 104 } = options;
+  // 64 between columns: enough for a wire to curve, and a one-row chain of seven 232px cards fits a
+  // laptop at about 0.75x. at 104 it needed 0.63x, where the property rows stop being legible.
+  const { rankdir = "LR", nodesep = 26, ranksep = 64 } = options;
 
   const g = new dagre.graphlib.Graph({ multigraph: true });
   g.setGraph({ rankdir, nodesep, ranksep, marginx: 24, marginy: 24 });
@@ -99,6 +101,7 @@ export function toFlow(pipeline, options = {}) {
   }
   dagre.layout(g);
 
+  const wired = connectedPorts(pipeline);
   const nodes = ordered.map((node) => {
     const box = g.node(node.id);
     return {
@@ -117,6 +120,7 @@ export function toFlow(pipeline, options = {}) {
         params: node.params,
         inputs: node.inputs,
         outputs: node.outputs,
+        connected: [...(wired.get(node.id) ?? [])],
       },
     };
   });
