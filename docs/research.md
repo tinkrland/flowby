@@ -485,3 +485,81 @@ both are moving toward **authoring presets inside the product**: vectary says cu
 ## why this reads as more intuitive than a raw graph
 
 the answer both products give, from opposite directions, is the same: **start from the task, keep the graph.** a raw node editor asks a person to translate an intention into a topology before anything appears on screen, and to know which of three hundred models the topology wants. a preset answers the intention in the language it was asked in, and leaves the topology behind it for the person who needs to open it. the presets are not a simplification of the graph; they are a vocabulary for it, and this tree's contribution is to insist that both are the same object rather than two tools kept in sync.
+
+## fuser's youtube tutorials, the ones that were actually heard (2026-11-12)
+
+the channel's playlist is 19 videos, 2:09 to 11:27 each. the sandbox is refused by youtube (bot check),
+so nothing was downloaded and no frames were looked at. what was read is the **description and spoken
+transcript** of three of them, through the browser: *Using The Compositor Node* (6:03), *Fuser Tutorial:
+Recipes* (9:21) and *Create Infinite Variations* (7:06). the other sixteen are not read. this is
+narration, so it says what the people do and what they call things, and it cannot say how anything looks.
+
+### recipes (the one that matters for presets)
+
+heard, in order:
+
+* **a recipe is made by selecting nodes, not by writing one.** shift and drag a box over the nodes, a small
+  bar appears at the bottom, the stack-of-papers icon is *create recipe from selection*, and the selection
+  **collapses into one node**.
+* **inputs and outputs are chosen by wire.** the new recipe opens with its inputs on the left; the author
+  *disconnects* the wires they do not want exposed and *drags in* others (duration, aspect) to add one.
+  outputs work the same way.
+* **a recipe has a name, description, tags, a hero image, and a name and description per input and per
+  output.** tags are what the gallery filters by.
+* **recipes nest.** one recipe can sit inside another, e.g. a render-style recipe cleaning an input photo
+  before a lighting recipe runs.
+* **recipes chain on the canvas**: output of one wired to the input of the next, nothing else to set,
+  because a recipe with no prompt has the prompt baked in.
+* **two ways to use one.** *use this recipe* opens a new workspace with it loaded in **focus mode** (a
+  full-screen form: write the input, press generate, download). an X in the corner leaves focus mode and
+  shows the same recipe as a node on the canvas. the speaker's point: a teammate can use it "and never have to
+  know that the nodes even exist".
+* **you can open any recipe to see how it was built, and clone it.** publishing is a separate step from saving,
+  and community sharing requires publishing first. a published recipe can be edited later (swap a model for
+  a newer one).
+* **the library lives on the left toolbar**: tabs for featured, your own, and recently used, with search.
+
+### compositor
+
+* **it is a node that opens an editor**, and closing the editor is called "exit, saving and closing". the
+  editor has a **layers panel on the left** ("keeps everything organized and non-destructive"), a
+  **properties panel on the right** (brush size, colour, opacity, hardness, streamline), and a **transform
+  tool that rotates a 3D layer on x, y and z**.
+* **a brush stroke is an input, not a drawing.** the orange strokes mark where something should go, and the
+  downstream image model is told to replace them with a style. the speaker: "i'm indicating placement and
+  color", the compositor is "the layer between your idea and your prompt".
+* three start points were shown: a 3D mesh, a logo and text stack, a brush stroke.
+
+### infinite variations
+
+* **daisy-chaining is the editing method**: one instruction per node, each fed by the one before (hair clips,
+  then t-shirt colour, then head turn). a reference image is just a second input to the same node.
+* three models were compared on the same chain. the speaker reports one has a lower success rate with
+  multiple images, and that the aspect ratio of two follows the input while the third uses what you pick.
+  the **canvas is how the comparison is made**: copy the chain, swap the model.
+
+### what this changes in flowby, and what it does not
+
+nothing here contradicts the 2026-11-08 reading; it confirms the closing paragraph of this file (fuser's
+recipes are user-recorded) and gives the shape of the gesture.
+
+* **already true:** a preset is a subgraph spawned and left visible; presets expose a parameter list
+  (`exposed`); the board can fan one head out to several tails (`sweep`). the daisy chain is what flowby
+  already draws.
+* **missing, in the order it would pay off:**
+  1. *create preset from selection*: box-select nodes, collapse to one node, with its inputs and outputs
+     chosen by which wires are left connected. flowby's presets are a python file today, so this is also
+     the first thing that needs the store.
+  2. *focus mode*: a preset as a form (inputs, generate, result) with the graph one click away. flowby
+     has the data (`exposed`, the compiled steps) and no screen for it.
+  3. *a library with featured / mine / recent*: the kits menu is the start of the left half of this.
+  4. *tags and a hero image per preset*, which only means something once presets have been run.
+* **not taken:** the compositor. flowby has a frame and a scene already, and the editor is a product
+  of its own. what is worth taking is the idea that a mark on an image is a **placement input** for a
+  model, which flowby has no node for.
+
+### not verified
+
+sixteen of nineteen videos are unread, including *Getting Started with Fuser Apps*, the three Apps builds
+and the Creative Code ones, and nothing here was seen, only heard. no frames, so no layout, spacing or
+motion claims come from this section.
