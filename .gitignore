@@ -1,9 +1,0 @@
-__pycache__/
-*.pyc
-out/
-node_modules/
-.DS_Store
-web/public/graph.json
-web/dist/
-web/public/presets.json
-public/presets.json
