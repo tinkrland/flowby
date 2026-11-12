@@ -563,3 +563,75 @@ recipes are user-recorded) and gives the shape of the gesture.
 sixteen of nineteen videos are unread, including *Getting Started with Fuser Apps*, the three Apps builds
 and the Creative Code ones, and nothing here was seen, only heard. no frames, so no layout, spacing or
 motion claims come from this section.
+
+## the tutorials, seen rather than heard (2026-11-12, later)
+
+youtube refuses this sandbox's address, so the videos were fetched from a **tenki.cloud sandbox VM**
+instead: yt-dlp with `--extractor-args "youtube:player_client=web_embedded"` and deno for the js challenge.
+four videos were downloaded at 480p and sampled at one frame every 8 seconds (217 frames), read as
+4x4 contact sheets; two moments were re-fetched at 720p for legible text. the frames looked at:
+*Recipes* (5 sheets), *Using The Compositor Node* (1 sheet), *Getting Started with Fuser Apps* (1 sheet),
+*Infinite Variations* (none). **19 minutes of the 19 videos were looked at out of 2 hours**, so this is
+samples, not a shot list. two frames are kept in `docs/frames/`.
+
+### the two surfaces are not the same colour
+
+this corrects the earlier assumption that fuser is one pale product.
+
+* **the graph canvas is pale**: `#f4f4f4` to `#f9f9f9`, white cards, thin grey bezier wires, dark grey
+  text. toolbar icons are line icons on the same pale field.
+* **the compositor editor is dark**: near-black canvas, `#252525` panels, a layers list on the left and a
+  properties list on the right.
+* a **recipe's focus view is pale again**, and looks like a web app, not an editor.
+
+flowby is dark only, so the honest transfer is: borrow the *pale canvas + white cards + grey wires*
+hierarchy as **layering and restraint**, not as colours. what makes it read calmly is that nothing on
+the canvas has a fill except the cards themselves.
+
+### the canvas chrome, from a real frame
+
+`docs/frames/selection-toolbar.jpg` (Recipe Making, 1280x720):
+
+* **top bar**: a square app icon, the workspace name, a chevron to rename, then on the right an avatar,
+  a **zoom readout (109%)** and Share.
+* **left edge**: a floating vertical toolbar (pointer, square/frame, comment bubble, plus, gear).
+* **bottom left**: a credits figure (5,303,556 on that account), help, and a grid icon.
+* **bottom centre**: an "open chat" input, always visible.
+* **selected nodes glow purple** and their ports are small filled green circles; unconnected ports are
+  hollow. **the wires carry no labels.**
+* **when two or more nodes are selected, a pill-shaped bar floats at the bottom centre**: expand/focus,
+  duplicate, delete, lock, then a number the video reads as the **credit cost of the selection (2,538)**, a "..." and an
+  arrow. that cost-in-the-toolbar detail is the one thing here flowby should copy first; a selection is
+  a proposal, and its price belongs next to it.
+
+### a recipe used in focus mode, from a real frame
+
+`docs/frames/recipe-focus-mode.jpg` (Storyboard Maker):
+
+* **top bar**: icon, recipe name, author handle, and a single X on the right. no canvas, no nodes.
+* **left sidebar, about a third of the width** (not measured): a "Description" heading with one sentence of what it does, an "Inputs" heading
+  with a "Reset inputs" control, then one labelled field per exposed input (`Story Brief - Text`, a
+  textarea), a full-width primary button, and the remaining credits under it.
+* **main area**: the output, large, with a progress bar along the bottom of the frame labelled
+  `Fusing 0/1`, and `Output  Prev  Run 1/1  Next` for more than one result.
+* **there is exactly one action.** no re-roll beside generate, no settings. the input, the button, the
+  result, and a way to step between results.
+
+this is the whole of focus mode: a sentence, its inputs, a button, the result, and prev/next. it is small
+enough to build, and it is the piece that lets someone use a preset without meeting the graph.
+
+### what apps look like
+
+*Getting Started with Fuser Apps* shows an app as an **input on the left, output on the right**: a
+prompt field with a placeholder, a generated card, and a right-hand panel of configuration (selects,
+toggles) when the app is being built. the published app is a page, not a canvas.
+
+### still not settled
+
+english captions were captured for **nine** of the nineteen videos (kept outside the repo, in the
+conversation workspace) and read closely for three; nothing of the other ten is known. the four
+downloaded videos are sampled, not watched. in particular nothing
+here shows: how the selection pill animates in, what the library panel looks like, how a recipe's input
+wiring is edited (only that it is), or any keyboard shortcut. the earlier statement that flowby has no
+selection-to-preset, no focus mode and no marquee select still stands, and is now joined by a shape to
+build rather than a name to argue about.
