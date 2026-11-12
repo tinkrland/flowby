@@ -1,8 +1,10 @@
-# flowby
+# flowby - a computational creative's craftbox
+
+<p align="center">
+<img width="20%" height="20%" alt="image" src="https://github.com/user-attachments/assets/448996ed-d9b1-4949-afd8-9fd9f0b2bad5" />
+</p>
 
 *one board, two views, and the graph was never hidden*
-
-`github.com/tinkrland/flowby`
 
 flowby is a creative studio built on a single claim: the spatial layer and the node layer are the same workspace seen twice. you click a sketch, a sidebar opens with presets written in the language of the thing you are making ("convert sketch to 3d mesh", "apply matte frosted glass"), you drag one slider, and the pixels change. underneath, a subgraph got spawned, wired and left visible. there is a toggle that shows it.
 
