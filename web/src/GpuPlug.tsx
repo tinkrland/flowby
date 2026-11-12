@@ -33,6 +33,9 @@ export function GpuPlug() {
   const [narrow, setNarrow] = useState(typeof window !== "undefined" && window.innerWidth < 560);
   useEffect(() => { const f = () => setNarrow(window.innerWidth < 560); window.addEventListener("resize", f); return () => window.removeEventListener("resize", f); }, []);
   const root = useRef<HTMLDivElement | null>(null);
+  // on a phone the panel hangs from the header's real bottom, which moves when the header wraps
+  const [top, setTop] = useState(52);
+  useEffect(() => { if (open) { const h = root.current?.closest("header"); if (h) setTop(Math.round(h.getBoundingClientRect().bottom) + 6); } }, [open, narrow]);
 
   const load = useCallback(async () => {
     try {
@@ -107,7 +110,7 @@ export function GpuPlug() {
         aria-haspopup="dialog"
         aria-expanded={open}
         title={button.title}
-        style={{ display: "flex", alignItems: "center", gap: 7, background: "#27272a", color: N.text, border: 0, borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 13 }}
+        style={{ display: "flex", alignItems: "center", gap: 7, background: "#27272a", color: N.text, border: 0, borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 13, whiteSpace: "nowrap" }}
       >
         <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: TONE[button.tone], boxShadow: button.tone === "up" ? "0 0 0 3px rgba(74,222,128,0.18)" : "none" }} />
         {button.label}
@@ -117,7 +120,7 @@ export function GpuPlug() {
         <div
           role="dialog"
           aria-label="plug a gpu"
-          style={{ ...(narrow ? { position: "fixed", top: 52, left: 12, right: 12, width: "auto" } : { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 400 }), maxHeight: "min(640px, calc(100vh - 80px))", overflowY: "auto", background: N.bg, border: `1px solid ${N.line}`, borderRadius: 12, padding: 14, zIndex: 30, boxShadow: "0 18px 50px rgba(0,0,0,0.55)", color: N.text, fontSize: 12.5 }}
+          style={{ ...(narrow ? { position: "fixed", top: top, left: 12, right: 12, width: "auto" } : { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 400 }), maxHeight: "min(640px, calc(100vh - 80px))", overflowY: "auto", background: N.bg, border: `1px solid ${N.line}`, borderRadius: 12, padding: 14, zIndex: 30, boxShadow: "0 18px 50px rgba(0,0,0,0.55)", color: N.text, fontSize: 12.5 }}
         >
           <div style={{ fontSize: 13.5, fontWeight: 600 }}>plug a gpu</div>
           <div style={{ color: N.mute, marginTop: 3, lineHeight: 1.45 }}>

@@ -14,6 +14,7 @@ import { createRoot } from "react-dom/client";
 
 import { NodeCanvas } from "./NodeCanvas";
 import { GpuPlug } from "./GpuPlug";
+import { KitsMenu } from "./KitsMenu";
 import { Panel, type PlacedElement } from "./Panel";
 import { CommandBar, Toolbar, type BarMode } from "./Chrome";
 import * as gesture from "./gesture.mjs";
@@ -109,7 +110,8 @@ function App() {
       <header
         style={{
           display: "flex",
-          gap: 12,
+          flexWrap: "wrap",          // on a phone the buttons drop to a second line instead of squeezing the title
+          gap: "8px 12px",
           alignItems: "baseline",
           padding: "10px 16px",
           borderBottom: "1px solid #1c1c1f",
@@ -122,12 +124,13 @@ function App() {
         </span>
         <button
           onClick={() => setPanelOpen((open) => !open)}
-          style={{ marginLeft: "auto", background: "#27272a", color: "#e4e4e7", border: 0, borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}
+          style={{ marginLeft: "auto", background: "#27272a", color: "#e4e4e7", border: 0, borderRadius: 8, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
         >
           new node
         </button>
         {/* the far right corner of the page: plug in a gpu you rent. it sits in the header, above
             the new-node panel, so the two can both be open without covering each other */}
+        <KitsMenu />
         <GpuPlug />
       </header>
       <div
