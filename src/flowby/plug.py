@@ -42,30 +42,62 @@ from dataclasses import dataclass, field
 
 STATES = ("unchecked", "up", "down")
 
-# the providers the owner named, and "other". a note is how to stand a server up there, honestly
-# marked with what has and has not been checked. none of it is run by flowby.
+# the providers, and "other". a note is how to stand a server up there, honestly marked with what
+# has and has not been checked. none of it is run by flowby.
+#
+# `kind` is the one thing that changes behaviour:
+#   server   a machine you rent. you run a model server on it (vllm), and flowby asks its /health.
+#   hosted   a vendor that runs the model for you behind its own api. there is no machine and no
+#            /health to ask, so flowby cannot check it without spending money, and says so.
+SERVER, HOSTED = "server", "hosted"
+
 PROVIDERS = {
     "vultr": {
-        "label": "Vultr Cloud GPU",
+        "kind": SERVER, "label": "Vultr Cloud GPU",
         "note": "create a Cloud GPU instance (NVIDIA; Vultr documents A16 and A100 plans), ssh in, run a vllm server. "
                 "Vultr may require some account history before it allows a GPU instance.",
     },
     "gcp": {
-        "label": "Google Cloud",
+        "kind": SERVER, "label": "Google Cloud",
         "note": "create a Compute Engine instance with a GPU attached, ssh in, run a vllm server. "
                 "GPU quota has to be granted first and a free-tier account cannot attach one.",
     },
+    "azure": {
+        "kind": SERVER, "label": "Microsoft Azure",
+        "note": "create a virtual machine from an NC or ND GPU series (Azure documents NC A100 v4 and NC H100 v5), "
+                "ssh in, run a vllm server. GPU sizes are hidden until you request quota for that series and region.",
+    },
+    "aws": {
+        "kind": SERVER, "label": "Amazon Web Services",
+        "note": "launch an EC2 GPU instance (AWS documents P5 with up to 8 H100), ssh in, run a vllm server. "
+                "GPU instances count against a vCPU quota that a new account may need to raise first.",
+    },
     "amd": {
-        "label": "AMD Developer Cloud",
+        "kind": SERVER, "label": "AMD Developer Cloud",
         "note": "create a GPU droplet (MI300X, ROCm image), ssh in, run vllm. AMD's own guide reaches the "
                 "port over an ssh tunnel instead of opening it, which is also the safe way here.",
     },
+    "nvidia": {
+        "kind": SERVER, "label": "NVIDIA GPU, any cloud",
+        "note": "any machine with an NVIDIA GPU and CUDA drivers, on any cloud or in your own rack. run a vllm server "
+                "and give flowby its address. use this when your provider is not listed.",
+    },
+    "fal": {
+        "kind": HOSTED, "label": "fal.ai",
+        "note": "fal runs the model for you. give the endpoint of an app you deployed or a model you call, like "
+                "https://queue.fal.run/fal-ai/flux/schnell, and your fal key. fal has no free ping, so flowby does "
+                "not check it: the plug stays 'not checked' and the first real run is the proof.",
+    },
     "other": {
-        "label": "another provider, or your own machine",
+        "kind": SERVER, "label": "another provider, or your own machine",
         "note": "anything that gives you a gpu and a shell. run a model server and give flowby its address.",
     },
 }
 
+HOSTED_UNCHECKED = ("not checked, and flowby will not check it: this vendor has no free ping, so asking would "
+                    "spend your money. the first real run is the proof")
+# when a hosted run is built, fal's header is 'Authorization: Key <key>' (queue api docs), NOT 'Bearer'.
+# nothing sends it yet: a hosted plug is never checked, so _fetch's bearer header is never used for one.
 AUTH_NOTE = "sent as 'Authorization: Bearer <token>', the common convention. not confirmed against vllm's --api-key docs."
 
 TIMEOUT = 6.0
@@ -112,6 +144,40 @@ def parse_endpoint(raw: str, tunnel: bool = False) -> str:
         raise PlugRefused("that port is not a number between 1 and 65535") from None
     netloc = f"[{host}]" if ":" in host else host
     return f"{parts.scheme}://{netloc}" + (f":{port}" if port else "")
+
+
+# the one host each hosted vendor answers at. an address for a hosted plug must be on it, so a typo or a
+# lookalike can never receive the key. the host is from fal's queue api docs (queue.fal.run).
+HOSTED_HOSTS = {"fal": ("queue.fal.run",)}
+
+
+def parse_hosted(provider: str, raw: str) -> str:
+    """the cleaned address of a hosted app: https, the vendor's own host, an owner/app path, nothing else."""
+    text = (raw or "").strip()
+    if not text:
+        raise PlugRefused("give the endpoint, like https://queue.fal.run/fal-ai/flux/schnell")
+    parts = urllib.parse.urlsplit(text)
+    if parts.scheme != "https":
+        raise PlugRefused("a hosted endpoint is https only, because your key goes with it")
+    if parts.username or parts.password:
+        raise PlugRefused("do not put a password in the address. give the key in its own field")
+    if parts.query or parts.fragment:
+        raise PlugRefused("give the endpoint without a query")
+    allowed = HOSTED_HOSTS.get(provider, ())
+    if (parts.hostname or "").lower() not in allowed:
+        raise PlugRefused(f"a {PROVIDERS[provider]['label']} endpoint lives at {allowed[0]}. that is the only host the key is sent to")
+    try:
+        parts.port
+    except ValueError:
+        raise PlugRefused("that port is not a number between 1 and 65535") from None
+    if parts.port not in (None, 443):
+        raise PlugRefused(f"{allowed[0]} answers on the standard https port only")
+    segments = [seg for seg in parts.path.split("/") if seg]
+    if len(segments) < 2:
+        raise PlugRefused("add the owner and app after the host, like /fal-ai/flux/schnell")
+    if any(seg in (".", "..") for seg in segments):
+        raise PlugRefused("that path has a . or .. in it")
+    return f"https://{allowed[0]}/" + "/".join(segments)
 
 
 def _is_loopback(host: str) -> bool:
@@ -184,7 +250,7 @@ class Plug:
         masked token still says how long it is and how it starts."""
         return {
             "id": self.id, "label": self.label, "provider": self.provider,
-            "provider_label": PROVIDERS[self.provider]["label"], "endpoint": self.endpoint,
+            "provider_label": PROVIDERS[self.provider]["label"], "kind": PROVIDERS[self.provider]["kind"], "endpoint": self.endpoint,
             "state": self.state, "detail": self.detail, "models": list(self.models), "version": self.version,
             "checked_at": self.checked_at, "latency_ms": self.latency_ms, "tunnel": self.tunnel,
             "has_token": bool(self._token),
@@ -202,8 +268,16 @@ def make(plug_id: str, label: str, provider: str, endpoint: str, token: str = ""
         raise PlugRefused("give the plug a name, so you can tell it from the next one")
     if any(ch in (token or "") for ch in "\r\n\x00"):
         raise PlugRefused("a token cannot contain a line break")
-    url = parse_endpoint(endpoint, tunnel=tunnel)
-    return Plug(id=plug_id, label=clean[:60], provider=provider, endpoint=url, tunnel=bool(tunnel), _token=(token or "").strip())
+    if PROVIDERS[provider]["kind"] == HOSTED:
+        if tunnel:
+            raise PlugRefused("a hosted vendor is reached over the internet, so there is no tunnel to speak of")
+        url = parse_hosted(provider, endpoint)
+    else:
+        url = parse_endpoint(endpoint, tunnel=tunnel)
+    made = Plug(id=plug_id, label=clean[:60], provider=provider, endpoint=url, tunnel=bool(tunnel), _token=(token or "").strip())
+    if PROVIDERS[provider]["kind"] == HOSTED:
+        made.detail = HOSTED_UNCHECKED
+    return made
 
 
 def _fetch(plug: Plug, path: str, opener, timeout: float):
@@ -220,6 +294,13 @@ def _fetch(plug: Plug, path: str, opener, timeout: float):
 def check(plug: Plug, opener=None, clock=time.time, timeout: float = TIMEOUT, resolver=socket.getaddrinfo) -> Plug:
     """really ask the server. the only function here that touches the network, and the only one
     that can make a plug `up`. `opener` is injectable so the tests can stand a server up."""
+    if PROVIDERS[plug.provider]["kind"] == HOSTED:
+        # nothing is sent. fal documents no free ping; the only documented call is a billable run, and a
+        # check that spends money without being asked is worse than a plug that says it is unchecked.
+        plug.checked_at, plug.models, plug.version, plug.latency_ms = None, [], None, None
+        plug.state = "unchecked"
+        plug.detail = HOSTED_UNCHECKED
+        return plug
     opener = opener or urllib.request.build_opener(_NoRedirect)
     started = clock()
     plug.checked_at = started

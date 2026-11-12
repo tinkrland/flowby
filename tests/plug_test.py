@@ -380,7 +380,8 @@ class Collection(unittest.TestCase):
     def test_an_unknown_provider_is_refused_and_the_choices_are_named(self):
         with self.assertRaises(PlugRefused) as cm:
             Plugs().add("x", "aws-ish", "https://gpu.example.com")
-        self.assertIn("vultr, gcp, amd, other", str(cm.exception))
+        for key in pl.PROVIDERS:
+            self.assertIn(key, str(cm.exception))
 
     def test_a_blank_name_is_refused(self):
         with self.assertRaises(PlugRefused):
@@ -396,10 +397,84 @@ class Collection(unittest.TestCase):
         self.assertEqual(plugs.serving("nothing-serves-this"), [])
 
     def test_every_provider_has_a_label_and_a_note_that_says_something(self):
-        self.assertEqual(set(pl.PROVIDERS), {"vultr", "gcp", "amd", "other"})
+        self.assertEqual(set(pl.PROVIDERS), {"vultr", "gcp", "azure", "aws", "amd", "nvidia", "fal", "other"})
         for key, info in pl.PROVIDERS.items():
             self.assertGreater(len(info["note"]), 40, key)
         self.assertIn("ssh tunnel", pl.PROVIDERS["amd"]["note"])
+
+
+class Vendors(unittest.TestCase):
+    """the cloud gpus and the hosted vendor added after the first three."""
+
+    def test_every_provider_declares_a_kind_and_only_two_kinds_exist(self):
+        for key, info in pl.PROVIDERS.items():
+            self.assertIn(info["kind"], (pl.SERVER, pl.HOSTED), key)
+
+    def test_the_raw_gpu_clouds_are_servers_and_fal_is_hosted(self):
+        for key in ("vultr", "gcp", "azure", "aws", "amd", "nvidia", "other"):
+            self.assertEqual(pl.PROVIDERS[key]["kind"], pl.SERVER, key)
+        self.assertEqual(pl.PROVIDERS["fal"]["kind"], pl.HOSTED)
+
+    def test_a_new_cloud_is_added_like_the_old_ones_with_a_plain_address(self):
+        for key in ("azure", "aws", "nvidia"):
+            plug = Plugs().add("box", key, "https://gpu.example.com:8000")
+            self.assertEqual(plug.endpoint, "https://gpu.example.com:8000", key)
+            self.assertEqual(plug.as_dict()["kind"], "server")
+
+    def test_a_hosted_endpoint_keeps_its_owner_and_app_path(self):
+        plug = Plugs().add("flux", "fal", "https://queue.fal.run/fal-ai/flux/schnell/", "k")
+        self.assertEqual(plug.endpoint, "https://queue.fal.run/fal-ai/flux/schnell")
+
+    def test_a_hosted_endpoint_on_any_other_host_is_refused_so_the_key_goes_nowhere_else(self):
+        for bad in ("https://queue.fal.run.evil.com/a/b", "https://evil.com/a/b", "https://fal.run/a/b",
+                    "https://queue.fal.run@evil.com/a/b", "https://127.0.0.1/a/b"):
+            with self.assertRaises(PlugRefused, msg=bad):
+                Plugs().add("x", "fal", bad, "k")
+
+    def test_a_hosted_endpoint_must_be_https_with_no_credentials_query_or_odd_port(self):
+        for bad in ("http://queue.fal.run/a/b", "https://u:p@queue.fal.run/a/b", "https://queue.fal.run/a/b?x=1",
+                    "https://queue.fal.run:8443/a/b", "https://queue.fal.run/a/b#frag"):
+            with self.assertRaises(PlugRefused, msg=bad):
+                Plugs().add("x", "fal", bad, "k")
+
+    def test_a_hosted_endpoint_needs_an_owner_and_an_app_and_no_dot_segments(self):
+        for bad in ("https://queue.fal.run", "https://queue.fal.run/", "https://queue.fal.run/only", "https://queue.fal.run/a/../b"):
+            with self.assertRaises(PlugRefused, msg=bad):
+                Plugs().add("x", "fal", bad, "k")
+
+    def test_a_hosted_vendor_cannot_be_a_tunnel(self):
+        with self.assertRaises(PlugRefused):
+            Plugs().add("x", "fal", "https://queue.fal.run/a/b", "k", tunnel=True)
+
+    def test_checking_a_hosted_plug_sends_nothing_and_never_says_up(self):
+        plug = Plugs().add("flux", "fal", "https://queue.fal.run/fal-ai/flux/schnell", "SECRET")
+        opener = _Boom()
+        resolved = []
+        pl.check(plug, opener=opener, resolver=lambda *a, **k: resolved.append(a) or [])
+        self.assertEqual(plug.state, "unchecked")
+        self.assertEqual(resolved, [], "no dns lookup either: nothing is asked")
+        self.assertIn("no free ping", plug.detail)
+
+    def test_a_hosted_plug_is_unchecked_from_the_moment_it_is_made_and_says_why(self):
+        plug = Plugs().add("flux", "fal", "https://queue.fal.run/fal-ai/flux/schnell", "k")
+        self.assertEqual(plug.state, "unchecked")
+        self.assertIn("no free ping", plug.detail)
+
+    def test_a_hosted_plug_never_counts_as_serving_a_model_it_was_not_shown_to_serve(self):
+        plugs = Plugs()
+        plug = plugs.add("flux", "fal", "https://queue.fal.run/fal-ai/flux/schnell", "k")
+        pl.check(plug)
+        self.assertEqual(plugs.serving("flux-dev"), [])
+
+    def test_the_hosted_key_is_in_nothing_a_page_can_see(self):
+        plugs = Plugs()
+        plugs.add("flux", "fal", "https://queue.fal.run/fal-ai/flux/schnell", "FALKEY-123")
+        self.assertNotIn("FALKEY-123", json.dumps(plugs.all()))
+        self.assertNotIn("FALKEY-123", repr(plugs.get("plug-1")))
+
+    def test_the_hosted_note_says_there_is_no_check(self):
+        self.assertIn("no free ping", pl.PROVIDERS["fal"]["note"])
+        self.assertIn("queue.fal.run", pl.PROVIDERS["fal"]["note"])
 
 
 if __name__ == "__main__":

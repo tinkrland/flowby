@@ -401,9 +401,27 @@ class Gpus(Base):
 
     def test_the_listing_names_the_providers_and_says_how_auth_is_sent(self):
         status, body, _ = self.live.call("GET", "/api/plugs")
-        self.assertEqual(set(body["providers"]), {"vultr", "gcp", "amd", "other"})
+        self.assertEqual(set(body["providers"]), {"vultr", "gcp", "azure", "aws", "amd", "nvidia", "fal", "other"})
         self.assertIn("Bearer", body["auth"])
         self.assertIn("not confirmed", body["auth"])
+
+    def test_a_hosted_plug_is_added_and_stays_unchecked_when_asked_to_check(self):
+        status, body, _ = self.add(provider="fal", label="flux on fal", endpoint="https://queue.fal.run/fal-ai/flux/schnell", token="FALKEY-9")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["plug"]["kind"], "hosted")
+        self.assertNotIn("FALKEY-9", json.dumps(body))
+        pid = body["plug"]["id"]
+        status, checked, _ = self.live.call("POST", "/api/plugs/check", {"id": pid})
+        self.assertEqual(status, 200)
+        self.assertEqual(checked["plug"]["state"], "unchecked")
+        self.assertIn("no free ping", checked["plug"]["detail"])
+        self.assertNotIn("FALKEY-9", json.dumps(checked))
+
+    def test_a_hosted_plug_on_the_wrong_host_is_refused_over_http(self):
+        status, body, _ = self.add(provider="fal", endpoint="https://evil.example.com/a/b", token="FALKEY-9")
+        self.assertEqual(status, 422)
+        self.assertNotIn("FALKEY-9", json.dumps(body))
+        self.assertEqual(self.live.call("GET", "/api/plugs")[1]["plugs"], [])
 
     def test_a_public_http_address_is_refused_with_the_reason(self):
         status, body, _ = self.add(endpoint="http://45.32.10.20:8000")

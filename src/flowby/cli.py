@@ -106,6 +106,37 @@ def cmd_kits(args) -> int:
     return 0
 
 
+def cmd_serve(args) -> int:
+    """run the bridge: the board a page talks to, and the gpus plugged into it."""
+    import signal
+    from . import server as srv
+    from .session import Session
+    from .store import Store
+
+    host = args.host
+    if host not in srv.LOOPBACK and not args.i_know:
+        print(f"refusing to listen on {host}: this server has no login, and anyone who can reach it can "
+              f"add things to the board and read what is on it. use 127.0.0.1, or pass --i-know-it-is-open "
+              f"if it is behind something that authenticates.", file=sys.stderr)
+        return 2
+    store = Store(args.store)
+    session = Session(store, title="untitled")
+    origins = tuple(o for o in (args.origin or []))
+    httpd = srv.make_server(session, host=host, port=args.port, allow_origins=origins)
+    bound = httpd.server_address[:2]
+    print(f"flowby is listening on http://{bound[0]}:{bound[1]}  (assets in {args.store})")
+    if origins:
+        print("pages allowed to call it: " + ", ".join(origins))
+    signal.signal(signal.SIGTERM, lambda *a: (_ for _ in ()).throw(KeyboardInterrupt()))
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("stopped")
+    finally:
+        httpd.server_close()
+    return 0
+
+
 def cmd_presets(args) -> int:
     if args.json:
         print(json.dumps(presets.legend(), indent=2))
@@ -383,6 +414,13 @@ def build_parser() -> argparse.ArgumentParser:
     emit.add_argument("--out")
     emit.set_defaults(func=cmd_emit)
 
+    serve = subs.add_parser("serve", help="run the bridge a page talks to (loopback only unless told otherwise)")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--store", default="out/assets", help="where uploaded files are kept, by digest")
+    serve.add_argument("--origin", action="append", help="a page origin allowed to call it, like http://localhost:5173 (repeatable)")
+    serve.add_argument("--i-know-it-is-open", dest="i_know", action="store_true", help="allow a non-loopback host")
+    serve.set_defaults(func=cmd_serve)
     subs.add_parser("doctor", help="check the board against itself").set_defaults(func=cmd_doctor)
     return parser
 
