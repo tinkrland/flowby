@@ -1,0 +1,24 @@
+{
+  "id": "look.ballpoint",
+  "kind": "look",
+  "version": 1,
+  "name": "ballpoint",
+  "description": "A cheap blue pen running dry: thin pressure-varied line, the skip where the ball stalled, a blob where it stopped.",
+  "slot": "mark",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "ballpoint pen drawing: thin blue-black line that thins and thickens with pressure, occasional ink blob where the pen stopped, dry skips along the length",
+    "flux": "a ballpoint pen drawing in blue-black ink, the line thinning and thickening under hand pressure, an ink blob where the pen rested, dry skips where the ball stalled, cheap notebook paper",
+    "sdxl": "ballpoint pen, blue-black ink line, pressure variation, ink blob, sketch on paper"
+  },
+  "params": {}
+}

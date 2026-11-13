@@ -23,6 +23,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 from . import compile as compiler
 from . import catalogue
@@ -93,8 +94,9 @@ def cmd_modes(args) -> int:
 
 
 def cmd_kits(args) -> int:
-    from . import kits as kitmod
-    payload = kitmod.menu(presets=presets.PRESETS)
+    from . import kits as kitmod, looks as looksmod
+    shelf = looksmod.catalogue(args.looks) if Path(args.looks).is_dir() else {}
+    payload = kitmod.menu(presets=presets.PRESETS, looks=shelf)
     if args.json:
         print(json.dumps(payload, indent=2))
         return 0
@@ -103,7 +105,66 @@ def cmd_kits(args) -> int:
         for m in kit["members"]:
             indent = "      " if m["parent"] else "    "
             mark = "run" if m["runnable"] else m["state"]
-            print(f"{indent}{m['label']:18} {m['kind']:8} {mark:8} {m['blurb']}")
+            worded = "worded" if m["worded"] else ""
+            print(f"{indent}{m['label']:18} {m['kind']:8} {mark:8} {worded:7} {m['blurb']}")
+    return 0
+
+
+def cmd_looks(args) -> int:
+    """the catalogue of directions, grouped by the slot each one occupies."""
+    from . import looks as looksmod
+    try:
+        shelf = looksmod.catalogue(args.looks)
+    except looksmod.LookRefused as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(looksmod.shelf(shelf), indent=2))
+        return 0
+    panel = looksmod.shelf(shelf)
+    print(f"{panel['total']} looks, at most {panel['max_stack']} to a brief, one per slot")
+    for group in panel["groups"]:
+        print(f"\n{group['slot']}")
+        for look in group["looks"]:
+            families = ", ".join(look["families"])
+            print(f"  {look['name']:16} {look['kit'] or '-':10} {families:22} {look['description'][:60]}")
+            if look["conflicts"]:
+                print(f"  {'':16} conflicts with {', '.join(look['conflicts'])}")
+    print("\nthe slots: a mark is how the line was made, a surface what it was made on, a finish what "
+          "happened to it after")
+    return 0
+
+
+def cmd_look(args) -> int:
+    """compile a brief, or eject one look as the two steps a board would hold."""
+    from . import looks as looksmod
+    try:
+        shelf = looksmod.catalogue(args.looks)
+        if args.eject:
+            if len(args.look) != 1:
+                raise looksmod.LookRefused("eject takes one look, because it opens one graph")
+            payload = looksmod.eject(args.look[0], model=args.model, mode=args.mode, looks=shelf)
+        else:
+            payload = looksmod.compile_looks(tuple(args.look), model=args.model, mode=args.mode,
+                                             prompt=args.prompt, looks=shelf).as_dict()
+    except looksmod.LookRefused as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    if args.eject:
+        print(f"{payload['name']} as {len(payload['steps'])} steps:")
+        for step in payload["steps"]:
+            print(f"  {step['op']:14} {step['label']}")
+            for key, value in step["params"].items():
+                print(f"    {key:10} {value}")
+    else:
+        print(payload["prompt"])
+        print(f"\napplied: {', '.join(payload['applied'])}")
+        print(f"settings: {payload['params'] or 'nothing the look itself sets'}")
+    for warning in payload["warnings"]:
+        print(f"warning: {warning}", file=sys.stderr)
     return 0
 
 
@@ -629,7 +690,24 @@ def build_parser() -> argparse.ArgumentParser:
     subs = parser.add_subparsers(dest="command", required=True)
 
     subs.add_parser("presets", help="the preset menu").set_defaults(func=cmd_presets)
-    subs.add_parser("kits", help="the preset kits, and how far each member really is").set_defaults(func=cmd_kits)
+    kits_cmd = subs.add_parser("kits", help="the preset kits, and how far each member really is")
+    kits_cmd.add_argument("--looks", default="looks", help="the folder of look rows")
+    kits_cmd.set_defaults(func=cmd_kits)
+
+    look_cmd = subs.add_parser("looks", help="the catalogue of directions, one group per slot")
+    look_cmd.add_argument("--looks", default="looks", help="the folder of look rows")
+    look_cmd.add_argument("--json", action="store_true")
+    look_cmd.set_defaults(func=cmd_looks)
+
+    one = subs.add_parser("look", help="compile a brief, or eject one look as editable steps")
+    one.add_argument("look", nargs="+", help="look ids, at most three, one per slot")
+    one.add_argument("--model", default="flux-dev", help="the model the wording is for")
+    one.add_argument("--mode", default="image", choices=("image", "image_edit"))
+    one.add_argument("--prompt", default="", help="the sentence the directions wrap around")
+    one.add_argument("--looks", default="looks")
+    one.add_argument("--eject", action="store_true", help="show the steps a board would hold")
+    one.add_argument("--json", action="store_true")
+    one.set_defaults(func=cmd_look)
     subs.add_parser("legend", help="the four wires").set_defaults(func=cmd_legend)
 
     acts = subs.add_parser("actions", help="the shelf of code actions, and what each one takes")

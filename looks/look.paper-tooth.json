@@ -1,0 +1,24 @@
+{
+  "id": "look.paper-tooth",
+  "kind": "look",
+  "version": 1,
+  "name": "paper tooth",
+  "description": "Cold-press paper under the marks: the grain rises into every stroke and the sheet has an edge.",
+  "slot": "surface",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "cold-press watercolour paper under the marks: 300 gsm tooth rising through the pigment, a faint deckled edge to the sheet",
+    "flux": "the marks sit on cold-press watercolour paper, coarse 300 gsm tooth rising through every stroke, the sheet's deckled edge just inside the frame",
+    "sdxl": "cold press watercolour paper texture, coarse grain, deckled edge, paper surface"
+  },
+  "params": {}
+}

@@ -1,0 +1,24 @@
+{
+  "id": "look.flat-scan",
+  "kind": "look",
+  "version": 1,
+  "name": "flat scan",
+  "slot": "finish",
+  "kit": "handdrawn",
+  "description": "A flatbed scan of the sheet: even light with no perspective, a little dust, and a faint cool cast where the platen edge was.",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "a flatbed scan of the sheet: even unmodelled light, no perspective, a few dust specks, a faint cool cast at the edge",
+    "flux": "the picture is a flatbed scan of the loose sheet, perfectly even light with no cast shadow and no perspective, a scatter of dust specks, a faint cool cast along one edge from the platen",
+    "sdxl": "flatbed scan, flat even lighting, no perspective, no shadows, dust specks, slight cool cast, documentary"
+  },
+  "params": {}
+}

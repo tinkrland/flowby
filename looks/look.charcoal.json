@@ -1,0 +1,24 @@
+{
+  "id": "look.charcoal",
+  "kind": "look",
+  "version": 1,
+  "name": "charcoal",
+  "description": "Soft black dust: broad side-of-the-stick strokes, smudged darks, and a lifted highlight where an eraser pulled the dust away.",
+  "slot": "mark",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "charcoal drawing: broad blunt strokes from the side of the stick, smudged dense darks, highlights lifted back out with an eraser, paper grain through everything",
+    "flux": "a charcoal drawing, broad blunt strokes laid with the side of the stick, darks smudged and dense, highlights lifted out with an eraser, the grain of the paper visible through the dust",
+    "sdxl": "charcoal drawing, smudged, broad strokes, high contrast, textured paper, monochrome"
+  },
+  "params": {}
+}

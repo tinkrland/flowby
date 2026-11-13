@@ -1,0 +1,24 @@
+{
+  "id": "look.doodle",
+  "kind": "look",
+  "version": 1,
+  "name": "doodle",
+  "description": "Line with no plan: looping shapes that fill a margin, symbols repeated at different sizes, and a pen that keeps going over its own edges.",
+  "slot": "mark",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "a doodle: looping unbroken ballpoint lines, small repeated symbols at drifting sizes, shapes crossing their own edges, idle margin-filling marks",
+    "flux": "a doodle in ballpoint on ruled paper, looping unbroken lines, repeated little symbols at drifting sizes, shapes crossing their own edges, the idle marks of a mind wandering in a margin",
+    "sdxl": "doodle, ballpoint pen, looping line, repeated symbols, sketchy, notebook margin, black line on white"
+  },
+  "params": {}
+}

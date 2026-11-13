@@ -1,0 +1,26 @@
+{
+  "id": "look.crayon",
+  "kind": "look",
+  "version": 1,
+  "name": "crayon",
+  "description": "Wax pigment that skips the tooth: colour layered in one direction rather than blended, and every stroke leaves a broken edge.",
+  "slot": "mark",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "wax crayon drawing: dry pigment that skips across the paper tooth, colour laid in one direction and layered rather than blended, a broken edge on every stroke, contour gone over twice",
+    "flux": "a wax crayon drawing, dry pigment skipping over the tooth of the paper, colour laid in one direction in layers instead of blended, broken waxy edges on each stroke, the contour drawn over twice",
+    "sdxl": "crayon drawing, waxy texture, visible paper tooth, layered colour, childlike, bold colour"
+  },
+  "params": {
+    "steps": 32
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "look.marker",
+  "kind": "look",
+  "version": 1,
+  "name": "marker",
+  "description": "Alcohol marker: flat translucent fills that darken where they overlap, a hard edge where each stroke stopped, fine-liner on top.",
+  "slot": "mark",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "alcohol marker rendering: flat translucent colour fills that darken where two strokes overlap, a hard dried edge where each stroke stopped, a thin black fine-liner drawing over the top",
+    "flux": "an alcohol marker rendering, flat translucent colour fills banding darker where strokes overlap, a hard dried edge at the end of each stroke, a thin black fine-liner contour drawn over the colour",
+    "sdxl": "alcohol marker, flat colour, translucent overlap, hard edges, fine liner, design sketch"
+  },
+  "params": {}
+}

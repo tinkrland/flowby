@@ -1,0 +1,24 @@
+{
+  "id": "look.scribble",
+  "kind": "look",
+  "version": 1,
+  "name": "scribbled",
+  "description": "The pen never lifted: form is built out of scribbled mass, so the darks are back-and-forth strokes and the edges overshoot the shape.",
+  "slot": "mark",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "scribbled drawing: form built from overlapping back-and-forth pen strokes rather than tone, stroke ends overshooting the contour, denser scribble where it is dark",
+    "flux": "a scribbled drawing, mass built from overlapping back-and-forth pen strokes instead of shading, the strokes overshooting the contour at the edges, scribble packed tighter in the shadows",
+    "sdxl": "scribble drawing, overlapping pen strokes, rough edges, no shading gradient, energetic marks, monochrome"
+  },
+  "params": {}
+}

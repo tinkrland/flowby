@@ -1072,3 +1072,83 @@ building. the three at the top now exist as of this commit.
 * **describe, critique** (image -> words) -> a text-producing preset, which this tree has only one of.
 * **design variations with a count in the name** (`16 design variations`) -> the sweep already does
   this; what is missing is putting the count in the sidebar's label, as noted on 2026-11-13.
+
+## nodetool's preset compiler, read to build the look layer (2026-11-13)
+
+`github.com/nodetool-ai/nodetool`, `packages/presets` plus `docs/presets.md`. Cloned shallow, sparse
+checked out, read; nothing vendored and no code copied, because the value here is the rule set, not the
+implementation. Their own docs page is unusually precise about its own behaviour, and the source agrees
+with it, which is not always true of either.
+
+**The object.** A preset is one JSON file, `id` of `<kind>.<slug>` where kind is `camera|look|effect`
+(24 looks, 40 cameras, 28 effects, 10 studios), `slot` naming what it occupies (`move, rig, speed, look,
+effect, body, stock, grade, lighting, era, ramp`), `modes` (`video, image_to_video, reference_to_video,
+image, image_edit, video_edit`), `inputs`, `stackable`, `conflicts`, `aliases`, `prompt`, `params`,
+`family_params`, `families`, and optionally `preview`, `workflow`, `author`. Zod schema is the source of
+truth and it exports itself as JSON Schema for pack authors; the one thing JSON Schema could not express
+(a `default` key is required inside `prompt`) is patched in by hand after generation, and the comment
+saying so is the sort of honesty worth copying.
+
+**The stack rules** (`stack.ts`): at most three; every preset in a stack must be `stackable`; two cannot
+share a slot; a preset cannot sit with an id in its `conflicts` in either direction; every preset must
+list the request's mode. `presetPairBlock(a, b)` returns the reason and the blocking preset, and the
+picker disables the card with that sentence while the compiler throws with it, so the two cannot disagree.
+
+**The compile** (`compile.ts`): map model id to a family, take that family's fragment or `default`
+(with a warning when it falls back), append a string fragment with a space or join `prefix` + `replace`
++ `suffix` for an object one, merge `params` with `family_params[family]` (selected family overrides
+shared), drop any key outside the mode's allowlist with a warning, warn for scoped keys the selected
+family does not supply, and **throw naming both presets** when two set one key to different values. It
+makes no model call and costs nothing. `MAX_PRESET_STACK = 3` is a constant, not a setting.
+
+**The ejection** (`eject.ts`): one preset becomes four nodes with fixed x positions: `StringInput` named
+prompt, a `text.Template` holding the *compiled* wording, the generator for the mode with the compiled
+params and the model object, and an `Output`. If the preset names a `workflow`, the host loads that graph
+and clones it instead. Either way the style lands somewhere a person can edit it.
+
+**The studios** are a second row shape in the same catalogue: an outcome-named entry that opens an
+existing surface (create, effects, lipsync, a skill, a flow, a mini app) with presets preselected. That
+is a front door over the same parts, which is the idea flowby's kits already had.
+
+**What went into flowby**: `src/flowby/looks.py` and `looks/`, documented in `docs/looks.md`. The rules
+transferred nearly unchanged, the slot names did not (video grammar versus paper), and the fragment join
+is commas rather than spaces. Two of their habits were worth adopting on their own: the required
+`default` fragment, and refusing by name when two things disagree about one setting.
+
+**What did not transfer**: their compiler produces a prompt, so a compiled preset can never draw
+anything. flowby's presets are subgraphs, so the two layers meet at the `text.compose` step rather than
+at an API boundary, which is the reason `eject()` can hand back ops the graph already has.
+
+## comfy.org's hub, read for the recipe page (2026-11-13)
+
+`comfy.org/hub/workflows/` renders 936 workflow cards server-side (Astro, one page, no client fetch
+needed for the index). A card is a thumbnail, a title, a one-line summary, an author and a "Partner node"
+badge where the graph uses a first-party paid node. Titles mix generated names with hashes
+(`add-color-to-line-art-illustration-926bb8ebaa04`), and the categories are tasks rather than media.
+
+A single workflow page (`/hub/workflows/add-color-to-line-art-illustration-926bb8ebaa04/`) is the most
+complete recipe page found in any of these tools. In order:
+
+1. title, one-line summary, and three buttons: Download Workflow, Try in Cloud, API documentation.
+2. **Details**: each exposed input with its type, a `*` required mark, a saved example file, and a note
+   ("A black-and-white drawing or sketch to colour"). A long `Instructions` field arrives pre-filled with
+   a real prompt, so the empty state is a good example rather than an empty box.
+3. **Settings**: aspect ratio (Auto plus nine presets), resolution (1K/2K/4K), then *Advanced settings*
+   folded away holding only the seed. The split is the point: two choices that change the result, one
+   that repeats it.
+4. Run, an Output Example image, and "Inside the workflow": a read-only rendered preview of the graph
+   with a link to open it in the browser editor.
+5. **What you need**: runtime (Comfy Cloud), key name (`COMFY_API_KEY`), files, and "Needs a paid Cloud
+   plan and credits", stated *before* the run button rather than in an error afterwards.
+6. Generated-looking API JSON, which is the same graph as nodes keyed by id with `class_type`, `inputs`
+   and a `_meta.title` per node, plus a runnable Python/TypeScript/cURL snippet.
+7. An "About this workflow" prose block and four FAQ entries, generated per workflow.
+
+**What flowby should take, and does not yet have**: the `*` required mark with a saved example on every
+exposed input (flowby's `Exposed` carries a starting value and no example or required flag), the
+Advanced fold for seed-type settings, and the needs block rolled up from the chain's own `requires`
+(minutes, gpu, models, pip) which `presets.py` already holds per step and the recipe panel does not
+display. Recorded as work, not as a claim.
+
+**What is better here**: their page cannot be edited and re-shared (the graph preview is read-only and
+the API JSON is generated), while a flowby recipe is derived from the chain that is on the board.

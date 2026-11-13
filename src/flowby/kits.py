@@ -45,6 +45,10 @@ class Member:
     preset: str | None = None
     # the name in styles.py when a style has actually been built; None while it is only listed
     style: str | None = None
+    # the id in looks.py when the member has real wording behind it. not a style and not a preset: a
+    # look compiles to a sentence and settings, so a member with one can render before anything is
+    # trained. it stays `listed` regardless, because `listed` is about what the menu may offer to run.
+    look: str | None = None
 
     def __post_init__(self):
         if self.kind not in KINDS:
@@ -124,14 +128,14 @@ HANDDRAWN = Kit(
     label="handdrawn",
     blurb="the look of a line a hand dragged across a surface, wobbly and human",
     members=(
-        Member("pencil-sketch", "pencil sketch", blurb="graphite on tooth, grey line that lightens where the hand lifted, and a smudge where it rested"),
-        Member("doodle", "doodle", blurb="line with no plan: shapes that fill a margin, looping, going over their own edges"),
-        Member("scribble", "scribbled", blurb="the pencil never lifted, so the marks cross and darken where they pile up"),
-        Member("ballpoint", "ballpoint", blurb="a thin blue-black line with the skip and blob of a cheap pen running dry"),
-        Member("ink-pen", "ink pen", blurb="confident ink line that swells on the downstroke and pools where the nib stopped"),
-        Member("charcoal", "charcoal", blurb="soft black dust, broad strokes, white of the paper coming through the grain"),
-        Member("crayon", "crayon", blurb="waxy pigment that skips the tooth and leaves a broken edge on every stroke"),
-        Member("marker", "marker", blurb="flat felt-tip colour that overlaps into a darker band and bleeds past the line"),
+        Member("pencil-sketch", "pencil sketch", blurb="graphite on tooth, grey line that lightens where the hand lifted, and a smudge where it rested", look="look.pencil-sketch"),
+        Member("doodle", "doodle", blurb="line with no plan: shapes that fill a margin, looping, going over their own edges", look="look.doodle"),
+        Member("scribble", "scribbled", blurb="the pencil never lifted, so the marks cross and darken where they pile up", look="look.scribble"),
+        Member("ballpoint", "ballpoint", blurb="a thin blue-black line with the skip and blob of a cheap pen running dry", look="look.ballpoint"),
+        Member("ink-pen", "ink pen", blurb="confident ink line that swells on the downstroke and pools where the nib stopped", look="look.ink-pen"),
+        Member("charcoal", "charcoal", blurb="soft black dust, broad strokes, white of the paper coming through the grain", look="look.charcoal"),
+        Member("crayon", "crayon", blurb="waxy pigment that skips the tooth and leaves a broken edge on every stroke", look="look.crayon"),
+        Member("marker", "marker", blurb="flat felt-tip colour that overlaps into a darker band and bleeds past the line", look="look.marker"),
     ),
 )
 
@@ -185,14 +189,17 @@ def runnable(member: Member, styles: dict | None = None, presets: dict | None = 
     return state_of(member, styles, presets) == "ready"
 
 
-def menu(styles: dict | None = None, presets: dict | None = None) -> dict:
+def menu(styles: dict | None = None, presets: dict | None = None, looks: dict | None = None) -> dict:
     """the kits as the page draws them. nothing here is invented: every state comes from state_of."""
     out = []
     for kit in KITS.values():
         def row(m: Member) -> dict:
             state = state_of(m, styles, presets)
             return {"id": m.id, "label": m.label, "kind": m.kind, "blurb": m.blurb, "parent": m.parent,
-                    "preset": m.preset, "state": state, "runnable": state == "ready"}
+                    "preset": m.preset, "state": state, "runnable": state == "ready",
+                    # a look is wording, so say which and whether it is actually in the catalogue; a
+                    # member naming a look that is not there is the same lie as a preset that is not
+                    "look": m.look, "worded": bool(m.look and looks and m.look in looks)}
         rows = [row(m) for m in kit.members]
         out.append({"id": kit.id, "label": kit.label, "blurb": kit.blurb, "members": rows,
                     "ready": sum(1 for r in rows if r["runnable"]), "total": len(rows)})

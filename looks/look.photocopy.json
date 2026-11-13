@@ -1,0 +1,34 @@
+{
+  "id": "look.photocopy",
+  "kind": "look",
+  "version": 1,
+  "name": "photocopy",
+  "description": "Second generation on a toner machine: highlights blown out, blacks crushed, speckle through the midtones and a shadow band down one edge.",
+  "slot": "finish",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [
+    "look.pencil-sketch"
+  ],
+  "prompt": {
+    "default": "second-generation photocopy: highlights blown to white, blacks crushed solid, toner speckle through the midtones, one soft shadow band down the edge of the platen",
+    "flux": "a second generation photocopy, highlights blown out to pure white, blacks crushed to solid, toner speckle scattered through the midtones, one soft shadow band down the edge from the platen glass",
+    "sdxl": "photocopy texture, high contrast, blown highlights, crushed blacks, toner speckle, xerox"
+  },
+  "params": {
+    "guidance": 4.5,
+    "strength": 0.7
+  },
+  "family_params": {
+    "sdxl": {
+      "guidance": 7.5
+    }
+  }
+}

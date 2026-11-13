@@ -34,6 +34,9 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     job.py                      a plan's life, its illegal moves, its artifacts, its watchdog
     hub.py                      the fan-out to every board that is open, with replay
     kits.py                     preset kits: a shelf of styles and subtypes (analog, handdrawn, textile). listed until built
+    looks.py                    the direction a kit member gives a generator: a slot, a fragment per model
+                                family with a required default, and settings. compiles for free, refuses two
+                                looks down one slot, ejects as an editable template step
     flora.py                    the one door that takes a stranger's POST: a signed flora webhook, checked on
                                 the raw bytes inside a five-minute window, with no secret meaning no entry
     store.py                    bytes by digest: content-addressed, verified on write and on read, atomic
@@ -61,6 +64,12 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     tests/graph.test.mjs        the seam: palette drift, dangling wires, layout, overlaps
     tests/anim.test.mjs         the spec, including that reduced motion means none
     tests/dark.test.mjs         dark only: no light theme, no toggle, near-black page
+  looks/
+    look.pencil-sketch.json     one direction: slot, modes, a fragment per model family with a
+                                required default, and the settings that go with the wording
+    look.paper-tooth.json       a surface: what the marks were made on
+    look.photocopy.json          a finish, and the only look that declares a conflict
+    look.flat-scan.json         the other finish, so a brief can hold three without fighting
   actions/
     halftone.py                 dots, angles and colour modes: a brightness screen, image -> image
     risograph.py                two spot plates off register, and the only-if-two-inks controls

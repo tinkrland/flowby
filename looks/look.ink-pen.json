@@ -1,0 +1,24 @@
+{
+  "id": "look.ink-pen",
+  "kind": "look",
+  "version": 1,
+  "name": "ink pen",
+  "description": "Nib and bottle ink: the line swells on the downstroke, pools where the nib stopped, and cross-hatching ignores where the light is.",
+  "slot": "mark",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "nib pen and black ink: contours that swell on the downstroke and taper to a point, ink pooling where the nib rested, cross-hatching that ignores the light",
+    "flux": "a nib pen drawing in black ink, contours swelling on the downstroke and tapering to a hair, small ink pools where the nib paused, cross-hatched shadow laid on regardless of the light",
+    "sdxl": "ink pen drawing, black ink, line weight variation, cross hatching, ink pool, high contrast line art"
+  },
+  "params": {}
+}

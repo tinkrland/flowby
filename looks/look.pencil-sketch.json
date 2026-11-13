@@ -1,0 +1,24 @@
+{
+  "id": "look.pencil-sketch",
+  "kind": "look",
+  "version": 1,
+  "name": "pencil sketch",
+  "description": "Graphite on paper: the tooth of the sheet breaks every stroke, shadows are hatched rather than blended, and the white of the paper is left to do the highlights.",
+  "slot": "mark",
+  "kit": "handdrawn",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "prompt": {
+    "default": "pencil on paper: a drawn contour with visible paper tooth, shadows hatched with parallel strokes, no blended tone, unrendered white where the paper shows",
+    "flux": "a graphite pencil drawing on paper, drawn contour lines with the paper tooth breaking each stroke, shadows hatched with parallel graphite strokes, no blended shading, plain white paper left bare for the highlights",
+    "sdxl": "pencil sketch, graphite on paper, hatching for shadow, paper tooth, sketchy contour lines, monochrome, high detail"
+  },
+  "params": {}
+}

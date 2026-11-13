@@ -174,8 +174,11 @@ class Terminal(unittest.TestCase):
     def test_the_cli_prints_the_same_kits_the_menu_returns(self):
         import json, subprocess
         root = pathlib.Path(__file__).resolve().parents[1]
-        out = subprocess.run([str(root / "bin" / "flowby"), "--json", "kits"], capture_output=True, text=True, check=True).stdout
-        self.assertEqual(json.loads(out), kits.menu(presets=presets.PRESETS))
+        out = subprocess.run([str(root / "bin" / "flowby"), "--json", "kits", "--looks", str(root / "looks")],
+                             capture_output=True, text=True, check=True).stdout
+        from flowby import looks as looksmod
+        self.assertEqual(json.loads(out),
+                         kits.menu(presets=presets.PRESETS, looks=looksmod.catalogue(root / "looks")))
 
     def test_the_plain_view_indents_a_subtype_under_its_parent(self):
         import subprocess
