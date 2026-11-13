@@ -20,10 +20,13 @@ import { KitsMenu } from "./KitsMenu";
 import { Viewer } from "./Viewer";
 import { isNarrow, viewerRows } from "./viewer.mjs";
 import { Panel, type PlacedElement } from "./Panel";
-import { CommandBar, Toolbar, type BarMode } from "./Chrome";
+import { CommandBar, type BarMode } from "./Chrome";
+import { Rail } from "./Rail";
+import { nodeGroups, railState } from "./rail.mjs";
+import { NodesPanel } from "./NodesPanel";
 import * as gesture from "./gesture.mjs";
 import * as intake from "./intake.mjs";
-import { commandRows, executeState, isTunable } from "./nodeui.mjs";
+import { commandRows, isTunable } from "./nodeui.mjs";
 import { pill as pillOf } from "./selection.mjs";
 
 type GraphDocument = {
@@ -54,6 +57,7 @@ function App() {
   const [selected, setSelected] = useState<string[]>([]);
   const [bar, setBar] = useState<BarMode | null>(null);
   const narrow = useNarrow();
+  const [rail, setRail] = useState<string | null>(null);
   const [ran, setRan] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [locked, setLocked] = useState<string[]>([]);
@@ -108,7 +112,9 @@ function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (gesture.typing(e.target as HTMLElement)) return;
-      if ((e.shiftKey && e.key.toLowerCase() === "a") || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k")) {
+      if (e.shiftKey && e.key.toLowerCase() === "a") {
+        e.preventDefault(); setRail((open) => (open === "nodes" ? null : "nodes"));
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault(); setBar({ kind: "all" });
       }
     };
@@ -213,14 +219,24 @@ function App() {
             board={board}
           />
         )}
-        {!narrow && (
-          <Toolbar
-            execute={executeState(selected, Object.fromEntries(doc.pipeline.nodes.map((n: any) => [n.id, n])))}
-            onExecute={() => setRan(`would run ${selected.length} node${selected.length === 1 ? "" : "s"}: the worker is not connected to this page`)}
-            onOpenBar={() => setBar({ kind: "all" })}
-            onAddType={() => setPanelOpen(true)}
-          />
-        )}
+        <Rail
+          state={railState({ hasSelection: selected.length > 0, narrow })}
+          active={rail}
+          onClose={() => setRail(null)}
+          onSlot={(id) => {
+            if (id === "add") { setPanelOpen(true); setRail(null); return; }
+            if (id === "command") { setBar({ kind: "all" }); setRail(null); return; }
+            setRail((open) => (open === id ? null : id));
+          }}
+          onRun={() => setRan(`would run ${selected.length} node${selected.length === 1 ? "" : "s"}: the worker is not connected to this page`)}
+        >
+          {rail === "nodes" ? (
+            <NodesPanel groups={nodeGroups(menu ?? [])} onPick={(name: string) => {
+              setNote(`${name}: picked from the nodes popover. placing it on the board is the python bridge, which is not built yet`);
+              setRail(null);
+            }} />
+          ) : null}
+        </Rail>
         {pill.visible && (
           <SelectionPill
             model={pill}

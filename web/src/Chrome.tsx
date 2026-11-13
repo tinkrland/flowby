@@ -1,5 +1,5 @@
 /**
- * Chrome: the bottom toolbar and the command bar. thin skins over nodeui.mjs.
+ * Chrome: the command bar. a thin skin over nodeui.mjs.
  *
  * the toolbar is a floating pill: one button per wire type, a `+` that opens the command bar, and
  * an Execute button that is absent until a runnable node is selected. the command bar lists every
@@ -14,11 +14,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { quickConnect, searchCommands } from "./nodeui.mjs";
 import type { CommandRow, Chip } from "./nodeui.mjs";
-import { WIRES } from "./wires.mjs";
 
 const K = { bg: "#121214", line: "#1f1f23", text: "#e4e4e7", mute: "#71717a", dim: "#a1a1aa", accent: "#a78bfa", hover: "#1a1a1e" };
-
-const GLYPH: Record<string, string> = { text: "T", image: "▣", video: "▶", mesh: "◆" };
 
 function ChipView({ chip }: { chip: Chip }) {
   return (
@@ -29,51 +26,6 @@ function ChipView({ chip }: { chip: Chip }) {
       <span style={{ width: 6, height: 6, borderRadius: 3, background: chip.hex }} />
       {chip.label}
     </span>
-  );
-}
-
-export function Toolbar({
-  execute, onExecute, onOpenBar, onAddType,
-}: {
-  execute: { visible: boolean; label: string | null; count: number };
-  onExecute: () => void;
-  onOpenBar: () => void;
-  onAddType: (dtype: string) => void;
-}) {
-  return (
-    <div
-      role="toolbar"
-      aria-label="add and run"
-      style={{ position: "absolute", left: "50%", bottom: 16, transform: "translateX(-50%)", zIndex: 12, display: "flex", alignItems: "center", gap: 4, background: K.bg, border: `1px solid ${K.line}`, borderRadius: 999, padding: 5, boxShadow: "0 10px 30px rgba(0,0,0,0.5)" }}
-    >
-      {WIRES.map((w) => (
-        <button
-          key={w.dtype}
-          title={`add ${w.dtype}`}
-          onClick={() => onAddType(w.dtype)}
-          style={{ width: 32, height: 32, borderRadius: 999, background: "none", border: 0, color: w.hex, fontSize: 14, cursor: "pointer" }}
-        >
-          {GLYPH[w.dtype]}
-        </button>
-      ))}
-      <span style={{ width: 1, height: 20, background: K.line, margin: "0 2px" }} />
-      <button
-        title="add a node (shift+A)"
-        onClick={onOpenBar}
-        style={{ width: 32, height: 32, borderRadius: 999, background: "#1a1a1e", border: 0, color: K.text, fontSize: 18, cursor: "pointer" }}
-      >
-        +
-      </button>
-      {execute.visible && (
-        <button
-          title={execute.label ?? "run"}
-          onClick={onExecute}
-          style={{ height: 32, borderRadius: 999, background: K.accent, border: 0, color: "#0b0b0d", fontSize: 12, fontWeight: 700, padding: "0 14px", marginLeft: 2, cursor: "pointer" }}
-        >
-          ✦ {execute.label}
-        </button>
-      )}
-    </div>
   );
 }
 

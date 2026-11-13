@@ -1,0 +1,10 @@
+# python
+__pycache__/
+*.pyc
+out/
+
+# the web build: npm install and npm run build regenerate both
+web/node_modules/
+web/dist/
+web/public/graph.json
+web/public/presets.json
