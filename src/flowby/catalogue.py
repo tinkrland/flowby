@@ -168,6 +168,20 @@ PRIMITIVES = {
 }
 
 
+# presets this tree added that the brief never mentions. a third category, because PRIMITIVES means
+# "the brief assumes it without naming it" and these were not assumed by anyone: they came from the
+# owner's read of vectary's preset list (docs/research.md, 2026-11-13). keeping them out of PRIMITIVES
+# stops that word drifting into "anything we added", which would make coverage stop meaning anything.
+ADDED = {
+    "swatch-swap": ("vectary recolours with a model; the owner's swatchswap plugin recolours by "
+                    "measurement, and this is that, so the claim is arithmetic and not inference"),
+    "palette-9": ("vectary's 'color palette 3x3'. a palette is counted, not generated: the same "
+                  "quantiser swatch-swap uses, answering with nine colours instead of pixels"),
+    "view-ortho": ("vectary's 'view - top / left / right'. a camera at a named place, which is the "
+                   "one thing every architecture board asks for first"),
+}
+
+
 def all_tools() -> list[tuple[str, str, Tool]]:
     """(group, section, tool) for every bullet, flattened, in the order the brief lists them."""
     out = []
@@ -197,7 +211,7 @@ def coverage() -> dict:
                     f"controls")
 
     named = {tool.preset for _, _, tool in all_tools()}
-    unclaimed = sorted(set(presets.PRESETS) - named - set(PRIMITIVES))
+    unclaimed = sorted(set(presets.PRESETS) - named - set(PRIMITIVES) - set(ADDED))
     stale = sorted(set(PRIMITIVES) - (set(presets.PRESETS) - named))
 
     return {

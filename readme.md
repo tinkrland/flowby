@@ -147,6 +147,9 @@ every preset below is task-named, because the unit a person thinks in is the tas
 | `sketch-to-render` | controlnet-scribble, sdxl-turbo | green | green | refine | 2 | 3 |
 | `3d-text` | none: extrusion and bevelling is geometry maths | amber | red | explore | 2 | 3 |
 | `handwriting-to-font` | none: image maths in the browser; delivers a font bundle, not a wire | green | amber | refine | 2 | 5 |
+| `swatch-swap` | none: counting colours and blending pixels, in the browser | green | green | refine | 1 | 2 |
+| `palette-9` | none: the same quantiser, answering with nine colours | green | amber | explore | 1 | 1 |
+| `view-ortho` | none: trimesh, a camera and a projection | red | green | output | 1 | 1 |
 | `replace-object` | flux-fill, sam-segment | green | green | refine | 2 | 3 |
 | `place-graphic` | pbr-painter | red | red | refine | 2 | 3 |
 | `clear-interior` | flux-fill, sam-segment | green | green | refine | 2 | 3 |

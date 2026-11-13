@@ -28,6 +28,8 @@ CONTRACT = "flowby/1"
 BROWSER = {
     "font.detect": "web/src/font/pipeline.mjs detect(): find the letters on a scanned sheet",
     "font.pack": "web/src/font/pipeline.mjs trace() and build(): outline the letters and pack the font",
+    "image.palette": "web/src/swatch.mjs quantize(): count the colours a picture is made of",
+    "image.swatch": "web/src/swatch.mjs applySwatches(): blend each pixel toward a palette colour",
 }
 
 UNIMPLEMENTED = {
@@ -71,6 +73,7 @@ UNIMPLEMENTED = {
     "layers.split": "depth-anything weights",
     "scene.environment": "a scene builder, no weights",
     "pose.estimate": "dwpose weights",
+    "render.view": "trimesh, a camera and a projection: arithmetic, but not in a browser",
 }
 
 ELEMENT = "element."

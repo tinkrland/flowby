@@ -1673,6 +1673,130 @@ register(Preset(
 ))
 
 
+# -- three added from vectary's preset list, not from the brief (catalogue.ADDED) -----------------
+#
+# the owner read vectary's picker and asked for its families. these three are the ones this tree can
+# honestly answer, because the arithmetic already exists here or in the owner's own plugins:
+#
+#   swatch-swap   vectary recolours with a model. the owner's `swatchswap` figma plugin recolours by
+#                 measurement, and web/src/swatch.mjs is that algorithm ported with its constants
+#                 unchanged. so this preset promises arithmetic, which is a smaller promise.
+#   palette-9     the same quantiser answering with nine colours instead of pixels. vectary calls it
+#                 "color palette 3x3"; the count is the point, so the slider is the count.
+#   view-ortho    "view - top / left / right": a camera at a named place. no model, no guessing.
+
+register(Preset(
+    name="swatch-swap",
+    label="recolour to a palette",
+    blurb="every colour in a still swapped for the nearest in a palette, by measurement.",
+    applies_to=("image",),
+    input_dtype="image",
+    entry="switch",
+    entry_port="media",
+    sink="switch",
+    steps={
+        # one node, one job: the palette is either wired in from `palette-9` or it is this default.
+        # there is no second step to count first, because a person who wants the count has palette-9.
+        "switch": Step(
+            op="image.swatch",
+            label="swap them",
+            inputs={"media": Port("image"),
+                    "palette": Port("text", role="palette", optional=True)},
+            outputs={"out": Port("image")},
+            params={"match": 35, "palette": "#f4f4f5,#111113,#a78bfa,#22c55e,#f59e0b"},
+            requires={"minutes": 0.1},
+        ),
+    },
+    edges=(),
+    stage="refine",
+    sliders={
+        "match": Slider(
+            name="match", label="match", low=5, high=60, default=35,
+            means="how far a pixel may be from a palette colour and still count as it. wide match "
+                  "repaints more, narrow match leaves gradients alone.",
+            targets=(Target("switch", "match"),),
+            unit="",
+        ),
+        "palette": Slider(
+            name="palette", label="palette", low=0, high=3, default="studio",
+            means="which set of colours to land on. wired palette wins over this.",
+            targets=(Target("switch", "palette"),),
+            unit="",
+            kind="choice",
+            choices=(
+                ("studio", "studio: near-white, near-black, violet, green, amber"),
+                ("mono", "five greys, no hue at all"),
+                ("print", "cyan, magenta, yellow, ink"),
+                ("riso", "risograph spot inks: fluorescent pink, blue, yellow"),
+            ),
+        ),
+    },
+))
+
+register(Preset(
+    name="palette-9",
+    label="read its nine colours",
+    blurb="the colours a picture is actually made of, as a palette you can reuse.",
+    applies_to=("image",),
+    input_dtype="image",
+    entry="count",
+    entry_port="media",
+    sink="count",
+    steps={
+        "count": Step(
+            op="image.palette",
+            label="count the colours",
+            inputs={"media": Port("image")},
+            outputs={"out": Port("text", role="palette")},
+            params={"maxColors": 9},
+            requires={"minutes": 0.05},
+        ),
+    },
+    edges=(),
+    stage="explore",
+    sliders={
+        "swatches": Slider(
+            name="swatches", label="swatches", low=3, high=16, default=9,
+            means="how many colours to keep. nine is a 3x3, which is what vectary shows.",
+            targets=(Target("count", "maxColors"),),
+            unit=" colours",
+        ),
+    },
+))
+
+register(Preset(
+    name="view-ortho",
+    label="the top view",
+    blurb="the same model from a named, flat view: top, left, right or front.",
+    applies_to=("model",),
+    input_dtype="mesh",
+    entry="aim",
+    entry_port="geometry",
+    sink="aim",
+    steps={
+        "aim": Step(
+            op="render.view",
+            label="put the camera there",
+            inputs={"geometry": Port("mesh")},
+            outputs={"out": Port("image")},
+            params={"view": "top", "ortho": True, "size": 1024},
+            requires={"pip": ["trimesh"], "minutes": 0.6},
+        ),
+    },
+    edges=(),
+    stage="output",
+    sliders={
+        "view": Slider(
+            name="view", label="view", low=0, high=3, default="top",
+            means="which orthographic view to render. a named place, not a camera to steer.",
+            targets=(Target("aim", "view"),),
+            unit="",
+            kind="choice",
+            choices=(("top", "top"), ("left", "left"), ("right", "right"), ("front", "front")),
+        ),
+    },
+))
+
 PROCEDURAL = {
     "frosted-glass": "shading maths on a material, which is arithmetic rather than inference",
     "animate-composition": "a camera move and a render, which is exactly what they say they are",
@@ -1682,6 +1806,12 @@ PROCEDURAL = {
     "handwriting-to-font": ("thresholding, connected components and outline tracing on a scan: "
                             "image maths that runs in the browser, and a model would only guess at "
                             "letters it can measure"),
+    "swatch-swap": ("counting colours and blending pixels is arithmetic the browser already does. "
+                    "web/src/swatch.mjs is the port, and it is the owner's own plugin, not a guess"),
+    "palette-9": ("the same quantiser as swatch-swap: a palette is counted from pixels, so a model "
+                  "here would be inventing colours the picture does not have"),
+    "view-ortho": ("a camera at a named place is a rotation and a projection. trimesh can do it, and "
+                   "a model would be redrawing the object instead of looking at it"),
 }
 
 
