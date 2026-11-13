@@ -30,17 +30,14 @@ const STAGE_ORDER = ["explore", "refine", "output"];
 const NARROW_WHY = "the board is an editor on a desktop; this page is the phone view";
 
 /**
- * slots whose panel still lives in the header.
+ * slots whose panel still lives somewhere else.
  *
- * a rail slot that opened nothing would be a button that lies, so these two are drawn dim with the
- * reason in their tooltip until their panels move. this is the honest state on 2026-11-13, not a
- * permanent design: the kits menu and the gpu plug are self-anchored components and moving them means
- * giving each one a rail variant, which is its own change.
+ * a rail slot that opened nothing would be a button that lies, so a slot listed here is drawn dim with
+ * the reason in its tooltip. empty since 2026-11-13: library and settings moved out of the header into
+ * their slots, so every slot now opens something. the mechanism stays, because the next panel built
+ * for the header will need the same honesty.
  */
-export const PENDING = Object.freeze({
-  library: "its panel is still in the header; moving it into the rail is the next step",
-  settings: "its panel is still in the header; moving it into the rail is the next step",
-});
+export const PENDING = Object.freeze({});
 
 /**
  * the rail, with liveness.

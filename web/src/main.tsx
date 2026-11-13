@@ -25,6 +25,7 @@ import { CommandBar, type BarMode } from "./Chrome";
 import { Rail } from "./Rail";
 import { nodeGroups, railState } from "./rail.mjs";
 import { NodesPanel } from "./NodesPanel";
+import { RailPanel } from "./RailPanels";
 import * as gesture from "./gesture.mjs";
 import * as intake from "./intake.mjs";
 import { commandRows, isTunable } from "./nodeui.mjs";
@@ -214,16 +215,8 @@ function App() {
         <span title="camera zoom" style={{ marginLeft: "auto", color: "#71717a", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
           {Math.round(zoom * 100)}%
         </span>
-        <button
-          onClick={() => setPanelOpen((open) => !open)}
-          style={{ background: "#27272a", color: "#e4e4e7", border: 0, borderRadius: 8, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
-        >
-          new node
-        </button>
-        {/* the far right corner of the page: plug in a gpu you rent. it sits in the header, above
-            the new-node panel, so the two can both be open without covering each other */}
-        <KitsMenu />
-        <GpuPlug />
+        {/* the header says what the document is and nothing else. add, kits and the gpu plug are rail
+            slots now (2026-11-13), so a control has one home instead of two */}
       </header>
       <div
         style={{ flex: 1, minHeight: 0, position: "relative" }}
@@ -260,6 +253,16 @@ function App() {
           }}
           onRun={() => setRan(`would run ${selected.length} node${selected.length === 1 ? "" : "s"}: the worker is not connected to this page`)}
         >
+          {rail === "library" ? (
+            <RailPanel title="Library" blurb="preset kits: a style is listed until its images are gathered and it is trained, and only a trained one can be used.">
+              <KitsMenu embedded />
+            </RailPanel>
+          ) : null}
+          {rail === "settings" ? (
+            <RailPanel title="Settings" blurb="the gpu you rent, and where flowby's server is.">
+              <GpuPlug embedded />
+            </RailPanel>
+          ) : null}
           {rail === "nodes" ? (
             <NodesPanel groups={nodeGroups(menu ?? [])} onPick={(name: string) => {
               setNote(`${name}: picked from the nodes popover. placing it on the board is the python bridge, which is not built yet`);

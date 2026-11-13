@@ -13,9 +13,10 @@ import type { KitData } from "./kitsmenu.mjs";
 const N = { bg: "#121214", line: "#26262a", text: "#e4e4e7", mute: "#71717a", dim: "#a1a1aa", accent: "#a78bfa" };
 const TONE: Record<string, string> = { up: "#4ade80", idle: "#a1a1aa", off: "#52525b" };
 
-export function KitsMenu() {
+export function KitsMenu({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useMemo(() => client({ base: baseUrl((import.meta as any).env ?? {}) }), []);
-  const [open, setOpen] = useState(false);
+  // embedded means the rail owns the open state: the panel is the slot's content, not a popover
+  const [open, setOpen] = useState(embedded);
   const [kits, setKits] = useState<KitData[] | null>(null);
   const [reachable, setReachable] = useState(true);
   const [narrow, setNarrow] = useState(typeof window !== "undefined" && window.innerWidth < 560);
@@ -31,7 +32,7 @@ export function KitsMenu() {
   }, [api]);
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     const away = (e: MouseEvent) => { if (root.current && !root.current.contains(e.target as Node)) setOpen(false); };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     window.addEventListener("mousedown", away);
@@ -43,8 +44,8 @@ export function KitsMenu() {
   const views = (kits ?? []).map(kitView);
 
   return (
-    <div ref={root} style={{ position: narrow ? "static" : "relative" }}>
-      <button
+    <div ref={root} style={embedded ? undefined : { position: narrow ? "static" : "relative" }}>
+      {!embedded && <button
         onClick={() => { setOpen((o) => !o); if (!open) void load(); }}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -53,18 +54,23 @@ export function KitsMenu() {
       >
         <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: TONE[button.tone] }} />
         {button.label}
-      </button>
+      </button>}
 
       {open && (
         <div
           role="dialog"
           aria-label="preset kits"
-          style={{ ...(narrow ? { position: "fixed", top: top, left: 12, right: 12, width: "auto" } : { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 380 }), maxHeight: "min(640px, calc(100vh - 80px))", overflowY: "auto", background: N.bg, border: `1px solid ${N.line}`, borderRadius: 12, padding: 14, zIndex: 30, boxShadow: "0 18px 50px rgba(0,0,0,0.55)", color: N.text, fontSize: 12.5 }}
+          style={embedded
+            ? { background: N.bg, color: N.text, fontSize: 12.5 }
+            : { ...(narrow ? { position: "fixed", top: top, left: 12, right: 12, width: "auto" } : { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 380 }), maxHeight: "min(640px, calc(100vh - 80px))", overflowY: "auto", background: N.bg, border: `1px solid ${N.line}`, borderRadius: 12, padding: 14, zIndex: 30, boxShadow: "0 18px 50px rgba(0,0,0,0.55)", color: N.text, fontSize: 12.5 }}
         >
-          <div style={{ fontSize: 13.5, fontWeight: 600 }}>preset kits</div>
-          <div style={{ color: N.mute, marginTop: 3, lineHeight: 1.45 }}>
-            families of styles. a style is listed until its images are gathered and it is trained, and only a trained one can be used.
-          </div>
+          {!embedded && <div style={{ fontSize: 13.5, fontWeight: 600 }}>preset kits</div>}
+          {/* the rail panel's own sentence already says this, and saying it twice in one panel reads as a bug */}
+          {!embedded && (
+            <div style={{ color: N.mute, marginTop: 3, lineHeight: 1.45 }}>
+              families of styles. a style is listed until its images are gathered and it is trained, and only a trained one can be used.
+            </div>
+          )}
           {!reachable && <div role="alert" style={{ marginTop: 12, color: "#fca5a5", lineHeight: 1.45 }}>flowby's server is not running, so the kits cannot be read.</div>}
           {views.map((v) => (
             <section key={v.id} style={{ marginTop: 14 }}>

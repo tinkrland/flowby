@@ -21,9 +21,10 @@ const TONE: Record<string, string> = { up: "#4ade80", down: "#f87171", idle: "#a
 
 type Form = { label: string; provider: string; endpoint: string; token: string; tunnel: boolean };
 
-export function GpuPlug() {
+export function GpuPlug({ embedded = false }: { embedded?: boolean } = {}) {
   const api = useMemo(() => client({ base: baseUrl((import.meta as any).env ?? {}) }), []);
-  const [open, setOpen] = useState(false);
+  // embedded means the rail owns the open state: the panel is the slot's content, not a popover
+  const [open, setOpen] = useState(embedded);
   const [list, setList] = useState<PlugList | null>(null);
   const [reachable, setReachable] = useState(true);
   const [form, setForm] = useState<Form>({ ...EMPTY_FORM });
@@ -51,7 +52,7 @@ export function GpuPlug() {
   // a green that is not refreshed goes stale, and the page re-reads the clock so it can say so
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(t); }, []);
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     const away = (e: MouseEvent) => { if (root.current && !root.current.contains(e.target as Node)) setOpen(false); };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     window.addEventListener("mousedown", away);
@@ -104,8 +105,8 @@ export function GpuPlug() {
   }
 
   return (
-    <div ref={root} style={{ position: "relative", marginLeft: 8 }}>
-      <button
+    <div ref={root} style={embedded ? undefined : { position: "relative", marginLeft: 8 }}>
+      {!embedded && <button
         onClick={() => { setOpen((o) => !o); if (!open) void load(); }}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -114,18 +115,23 @@ export function GpuPlug() {
       >
         <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: TONE[button.tone], boxShadow: button.tone === "up" ? "0 0 0 3px rgba(74,222,128,0.18)" : "none" }} />
         {button.label}
-      </button>
+      </button>}
 
       {open && (
         <div
           role="dialog"
           aria-label="plug a gpu"
-          style={{ ...(narrow ? { position: "fixed", top: top, left: 12, right: 12, width: "auto" } : { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 400 }), maxHeight: "min(640px, calc(100vh - 80px))", overflowY: "auto", background: N.bg, border: `1px solid ${N.line}`, borderRadius: 12, padding: 14, zIndex: 30, boxShadow: "0 18px 50px rgba(0,0,0,0.55)", color: N.text, fontSize: 12.5 }}
+          style={embedded
+            ? { background: N.bg, color: N.text, fontSize: 12.5 }
+            : { ...(narrow ? { position: "fixed", top: top, left: 12, right: 12, width: "auto" } : { position: "absolute", top: "calc(100% + 8px)", right: 0, width: 400 }), maxHeight: "min(640px, calc(100vh - 80px))", overflowY: "auto", background: N.bg, border: `1px solid ${N.line}`, borderRadius: 12, padding: 14, zIndex: 30, boxShadow: "0 18px 50px rgba(0,0,0,0.55)", color: N.text, fontSize: 12.5 }}
         >
-          <div style={{ fontSize: 13.5, fontWeight: 600 }}>plug a gpu</div>
-          <div style={{ color: N.mute, marginTop: 3, lineHeight: 1.45 }}>
-            run models on a gpu you rent. flowby talks to the model server on it, and calls it connected only after that server answers a health check.
-          </div>
+          {!embedded && <div style={{ fontSize: 13.5, fontWeight: 600 }}>plug a gpu</div>}
+          {/* the rail panel's own sentence already says this, and saying it twice in one panel reads as a bug */}
+          {!embedded && (
+            <div style={{ color: N.mute, marginTop: 3, lineHeight: 1.45 }}>
+              run models on a gpu you rent. flowby talks to the model server on it, and calls it connected only after that server answers a health check.
+            </div>
+          )}
 
           {!reachable && (
             <div role="alert" style={{ marginTop: 12, padding: "9px 11px", border: `1px solid #4c2a2a`, background: "#1c1212", color: "#fca5a5", borderRadius: 8, lineHeight: 1.45 }}>

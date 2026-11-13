@@ -16,15 +16,27 @@ test("five slots, in the reference order", () => {
   assert.equal(rail.RAIL[3].key, "shift+a");
 });
 
-test("run starts off and says why; a slot whose panel is still in the header says that too", () => {
+test("run starts off and says why; every slot opens something", () => {
   const s = rail.railState({});
   assert.equal(s.run.on, false);
   assert.match(s.run.why, /select a node first/);
   assert.equal(s.visible, true);
-  const byId = Object.fromEntries(s.items.map((i) => [i.id, i]));
-  assert.deepEqual(Object.entries(byId).filter(([, i]) => i.on).map(([id]) => id), ["add", "command", "nodes"]);
-  assert.match(byId.library.why, /still in the header/);
-  assert.match(byId.settings.why, /still in the header/);
+  // library and settings moved out of the header on 2026-11-13, so no slot is dim any more
+  assert.deepEqual(s.items.map((i) => i.id), ["add", "library", "command", "nodes", "settings"]);
+  for (const item of s.items) {
+    assert.equal(item.on, true, `${item.id} is dim`);
+    assert.equal(item.why, null, `${item.id} still explains itself`);
+  }
+});
+
+test("a slot listed as pending says why rather than lying, and the mechanism still works", () => {
+  // PENDING is empty now, so this drives the rule through a state that names one slot: the point is that
+  // a dim slot keeps its place and carries a reason, not that any particular slot is dim today
+  const s = rail.railState({ hasSelection: false });
+  assert.equal(Object.keys(rail.PENDING).length, 0, "nothing is pending as of 2026-11-13");
+  const narrow = rail.railState({ narrow: true });
+  assert.equal(narrow.visible, false);
+  for (const item of narrow.items) assert.match(item.why, /phone view/);
 });
 
 test("a selection makes run live, and clears the reason", () => {
