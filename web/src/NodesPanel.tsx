@@ -47,7 +47,7 @@ export function NodesPanel({ groups, onPick }: { groups: { groups: NodeGroup[]; 
                   onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
                 >
                   <span style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                    <span style={{ fontSize: 12.5 }}>{row.label}</span>
+                    <span style={{ fontSize: 12.5 }}>{row.show ?? row.label}</span>
                     <span style={{ marginLeft: "auto", color: K.mute, fontSize: 11 }}>{row.stage}</span>
                   </span>
                   <span style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3, fontSize: 10.5, color: K.dim }}>

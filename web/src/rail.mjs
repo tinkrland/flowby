@@ -86,7 +86,15 @@ export function nodeGroups(presets) {
       to: preset.to ?? null,
       stage: preset.stage ?? "explore",
       estimate: typeof preset.estimate === "number" ? preset.estimate : null,
+      variants: Number.isFinite(preset.variants) ? preset.variants : 1,
+      variantNoun: typeof preset.variant_noun === "string" ? preset.variant_noun : null,
     });
+  }
+  // vectary's picker says how many things a card makes ("16 design variations"), and that is the one
+  // piece of its naming worth copying: a card whose name does not say "four" is a card a person runs
+  // four times by hand and then wonders why.
+  for (const group of [...byType.values(), other]) {
+    for (const row of group.rows) row.show = countedName(row);
   }
   const rank = (stage) => {
     const at = STAGE_ORDER.indexOf(stage);
@@ -100,6 +108,23 @@ export function nodeGroups(presets) {
       count: g.rows.length,
     }));
   return { groups, total: list.length, empty: "no preset writes that type yet" };
+}
+
+/** what a wire carries, said as the thing a card makes. counts come before the noun, as vectary does it. */
+const NOUNS = Object.freeze({ image: "images", video: "clips", mesh: "meshes", text: "captions" });
+
+/**
+ * the name a person reads. one variant is the label, because "1 image" is noise; more than one counts
+ * itself, because four takes on one frame is the reason to press the card at all.
+ *
+ * @param {{ label?: string, variants?: number, to?: string|null, show?: string }} row
+ */
+export function countedName(row) {
+  const variants = Number.isFinite(row?.variants) ? row.variants : 1;
+  if (variants <= 1) return row?.label ?? "";
+  // a declared noun wins, because "6 meshes" is wrong for a card that makes six materials
+  const noun = row?.variantNoun ?? NOUNS[row?.to] ?? "results";
+  return `${variants} ${noun}`;
 }
 
 /**

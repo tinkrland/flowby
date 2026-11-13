@@ -5,6 +5,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
+import { readFileSync } from "node:fs";
+
 import * as rail from "../src/rail.mjs";
 
 const p = (name, over = {}) => ({ name, label: name, blurb: "", from: "text", to: "image", stage: "explore", estimate: 1, ...over });
@@ -84,4 +86,23 @@ test("an estimate is words, and a missing one is unknown rather than free", () =
   assert.equal(rail.estimateText(undefined), "cost unknown");
   assert.equal(rail.estimateText(Number.NaN), "cost unknown");
   assert.equal(rail.estimateText("2"), "cost unknown", "a string is not a measurement");
+});
+
+test("a card that makes several results says how many, in vectary's shape", () => {
+  assert.equal(rail.countedName({ label: "one frame" }), "one frame", "one variant is the label, not '1 image'");
+  assert.equal(rail.countedName({ label: "four takes", variants: 4, to: "image" }), "4 images");
+  assert.equal(rail.countedName({ label: "clips", variants: 3, to: "video" }), "3 clips");
+  // a declared noun wins, because "6 meshes" would be wrong for six materials
+  assert.equal(rail.countedName({ label: "apply materials", variants: 6, to: "mesh", variantNoun: "materials" }), "6 materials");
+  assert.equal(rail.countedName({ label: "x", variants: 2, to: "pointcloud" }), "2 results", "an unknown wire is not guessed at");
+});
+
+test("every row in the real menu has a name a person can read", () => {
+  const presets = JSON.parse(readFileSync(new URL("../public/presets.json", import.meta.url), "utf8")).presets;
+  const g = rail.nodeGroups(presets);
+  for (const group of g.groups) for (const row of group.rows) {
+    assert.equal(typeof row.show, "string");
+    assert.ok(row.show.length > 0, `${row.name} has no readable name`);
+    if (row.variants > 1) assert.match(row.show, /^\d+ /, `${row.name} hides its count`);
+  }
 });

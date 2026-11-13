@@ -1833,6 +1833,13 @@ def model_census() -> dict[str, list[str]]:
 
 def legend() -> dict:
     """what the frontend needs to draw a preset menu without knowing any of the above."""
+    # vectary's picker names a card by what it makes: "16 design variations". a sweep's noun is not
+    # always its output wire ("6 meshes" would be wrong for a material), so it is declared here, once,
+    # and a preset without one falls back to the wire.
+    variant_nouns = {
+        "relight": "lighting setups",
+        "apply-material": "materials",
+    }
     return {
         "presets": [
             {"name": p.name, "label": p.label, "blurb": p.blurb,
@@ -1843,6 +1850,7 @@ def legend() -> dict:
              "models": sorted({m for s in p.steps.values()
                                for m in (s.requires.get("models") or [])}),
              "variants": len(p.sweep.values) if p.sweep else 1,
+             "variant_noun": variant_nouns.get(p.name),
              "estimate": p.estimate()["minutes"]}
             for p in PRESETS.values()
         ],
