@@ -723,3 +723,137 @@ and orange on cream, the words "build flows" circled twice, a "Good sales takes 
 slide, and a logo lockup. it is not a screen recording of flora or vectary and shows no canvas, node or
 preset, so it contributes nothing to the product findings above. if a different clip was meant, it did
 not come through.
+
+## vectary's preset picker, from the owner's two clips (2026-11-13)
+
+the first three clips sent today were the wrong files (a brand animation). these two are the right ones:
+`vectary1.mp4` (19.8s, 1200x1080) and `vectary2.mp4` (2:17, 1920x1080). nothing here was used in the app,
+and the frames were read by on-screen text (tesseract) and by measuring pixels, not by eye, so the
+layout claims are limited to what text and numbers can say.
+
+### vectary2 is the launch video already in this file
+
+the long clip is the same product film as the one described under *the vectary canvas launch video*
+(five products, one reference then a grid of variants, sticky notes, a typeform embed, a live 3D scene),
+so it adds confirmation and a few extra boards rather than new findings. what its on-screen text adds:
+
+* **the breadcrumb is a workspace path**: `C26 / Work - Alberic / Voronoi mouse`, then `Canvas - Stool`,
+  `Canvas - Trimmer`, `Canvas - Bike`, `Canvas - Packaging`, `Canvas - Fashion`. one canvas per
+  product, filed under a project inside a workspace. the bottom of the video is `Demo / Recordings`.
+* **a board names what the work is for**: `BRIEF W.26`, `Shape exploration`, `Development basis`, and
+  a frame called `CAD views`. a preset result lands inside a named frame rather than loose.
+* **a result can be a decision, not only a picture**: a vote card (`Which airvent shape`, Option A,
+  B, C, powered by Typeform) sits on the canvas beside the generated options, and colours are named on
+  the board (`Moody Blue`, `Cornflower Blue`, `Cobalt Blue`, `Powder Blue`, `Baby Pink`) with hex codes.
+* **a node is a place to leave a note for a person**: `Let's try this orange fabric on the stool`,
+  `@John can you bring the colors picked by the CMF team here`, `I would add the logo in bigger here
+  in the center`. review happens on the board, addressed to people, next to the thing it is about.
+* **refinement is a mode of the same node**: `Remove and inpaint` with `Draw mask (Double-click image to
+  delete mask)`, `Edit image`, `Upscale 2x`, `Generate 3D`. the node stays one node.
+* **a 3D result is a scene with an object list**: `Properties / Objects` lists `Back logo
+  SQUARE_PLANE`, `Front logo SQUARE_PLANE`, `Rectangle Light 1`, and a `3D Embed` tab, so a generated
+  model arrives as a scene a person can keep editing.
+* **the last chapter is fashion**: `Fashion sketch to model`, `Match pose`, `Extract Pose`, and an
+  `AI 3D Model` result, which is the sketch-to-model path flowby's `extract-pose` and `sketch-to-mesh`
+  already approximate.
+
+### vectary1: the picker itself
+
+a 19.8 second capture of one image node (a brushed-metal device) with a second image beneath it (nine
+grey shapes, one orange) and the picker open beside it. the picker scrolls through the whole list. what
+is solid, from reading every frame at 5 per second:
+
+* **layout**: a white card with rounded corners, a search field at the top (`Search presets`) with a
+  **violet outline** (measured rgb 96,55,174, so a deep purple, not the pale lavender fuser uses), then
+  a single scrolling column. the canvas behind it is flat light grey (measured 239,239,239) with a faint
+  dot grid. the picker is anchored beside the node it will act on, joined to it by a thin wire.
+* **a row is a thumbnail, a bold title and a two-line grey description.** the thumbnail is a small
+  picture of what the preset does, not an icon. nothing else is on the row: no price, no model name, no
+  badge. (the tabs `All`, `Images`, `Text`, `3D`, `Custom` that the longer clip shows sit above this
+  list in the full UI; this capture crops them out.)
+* **the titles carry the argument in a short suffix**: `Handheld move to detail (6s)` puts the duration
+  in the name, `Interior - vacant room` / `Interior - pristine` / `Interior - paint job` / `Interior -
+  clean up` / `Interior - refurbish & repurpose` is a **family sharing a prefix**, `View - Top` / `Left`
+  / `Right` likewise, and a leading number counts the results: `4 Material sample extraction`, `4 Context
+  aware shape variations`, `16 Design variations`, `4 Design Variations`, `16 Material variants`.
+
+### the catalogue as it reads, in about 125 distinct titles
+
+grouped by what they do (my grouping, the product shows one flat list):
+
+* **extract and read an image**: Material sample extraction, Sphere material extraction, Depth Map,
+  Normal Map, Extract pose - Depth map, Spherical map, Seam line, Isolate object, Isolate object - 4
+  views, Isolate - White model, Remove Background, Precise Line Art, Line-art stencil, Color palette 3x3,
+  Color code, Describe - Detail & Joinery, Describe - Material, Critique & Improvement suggestions.
+* **variations, always with a count**: 4 Context aware shape variations, 16 Design variations, 4 Design
+  variations, 16 Material variants, Color variations, Material variations.
+* **change one thing**: Match pose, Match proportions, Match view, Match aesthetic, Match Design Language,
+  Recolor, Replace material, Replace selected object, Add hands, Add realism, Add reflections (clear
+  coat), Ground reflection, Ground object, Remove markings, Remove branding, Remove reflections, Remove
+  and inpaint, Improve lighting, Night shot, Dark mode, Light mode, Ultra sharp focus, Strong depth of
+  field, Focus selected, Enhance detail.
+* **move between media**: Generate 3D (High), Retexture 3D, Generate texture, Seamless texture, Make
+  tileable, HDRI texture, Generate 360-degree map for 3D, Sketch to photo, Simple pencil sketch, Dynamic
+  Pen Sketch, Concept Marker Sketch, Architectural render to photo, 2D plan to 3D top-down interior,
+  Product from technical drawing, Fashion sketch to model, Recreate graphics to flat 2D.
+* **camera and views**: Camera orbits scene, Handheld move to detail (6s), View - Top / Left / Right,
+  CAD views, CAD View - Top, Exploded view - marked, Detach - exploded view, Hero Asset (multi-view),
+  Volumetric three-quarter perspective view.
+* **reference boards**: Material Moodboard, Designer - surface cinema board, Design definition board,
+  a reference board for style analysis, 4 part technical sheet.
+* **interiors**: the five `Interior` rows above, plus Clear entire room or marked area.
+
+### what this says about flowby's catalogue
+
+flowby has **24 presets**. the picker lists roughly **125 titles**, and the two numbers are not the same
+kind of number, because the owner's brief collapsed 29 bullets into 16 presets and 16 controls on
+purpose. so the honest comparison is which *jobs* are missing, not which titles:
+
+* **already covered by a preset or a control**: material extraction (`extract-material`), apply
+  material (`apply-material`), texture maps and normal/depth (`texture-maps`), relight and improve
+  lighting (`relight`, `studio-light`), replace selected object (`replace-object`), remove background
+  (`cut-out`), swap environment (`swap-background`), extract pose (`extract-pose`), clean up a room
+  (`clear-interior`), inpaint (`inpaint`), place graphic (`place-graphic`), sketch to render
+  (`sketch-to-render`), sketch to mesh (`sketch-to-mesh`), layers to 3d (`layers-to-3d`).
+* **a family that flowby models as one preset plus a control**: the five `Interior` rows and the `View -
+  Top / Left / Right` rows are one job with a choice. vectary lists each as a row because a picker has
+  no sliders; flowby's `surface-detail` already shows the other answer. **this is the strongest argument
+  in the clip for keeping controls**, since 125 rows is what a menu without them looks like.
+* **not in flowby, and each a plausible preset**: *views* (a multi-view or CAD-style sheet of one
+  object, which is a sweep of four fixed cameras), *exploded view*, *describe* (a model reads the image
+  and returns text, which would be the first preset that goes image to amber), *critique*, *match
+  pose / proportions / view / aesthetic* (a reference image and a one-line instruction, which is a slot
+  preset like `style-transfer`), *recolor*, *add or remove reflections*, *night shot* and *dark / light
+  mode* (a relight with a fixed target), *seamless / tileable*, *HDRI*, *upscale*, *remove branding*,
+  *technical drawing to product*, and the whole **reference board** family (a grid of swatches or
+  views assembled into one image).
+
+### the three things worth taking
+
+1. **a count in the name.** `4 Material sample extraction` and `16 Design variations` tell the person
+   how many results to expect before they press anything. flowby's sweep knows its count and prints it
+   in the cost line, but the sidebar card does not lead with it. cheap to copy, and it is also the
+   honest price signal, since six results cost six tails.
+2. **a thumbnail of what the preset does.** every row is a picture, not an icon. this is the part
+   flowby cannot copy cheaply, because a thumbnail is a rendered example per preset and flowby has not
+   produced one asset yet. it is recorded as blocked on the first real worker, not as a styling task.
+3. **a prefix family.** `Interior - ...` and `View - ...` group by shared first word with no header at
+   all, so search for `interior` finds the family. flowby groups by stage; a prefix is an extra axis
+   that costs nothing and answers a different question (what is this about, not when do I use it).
+
+### what is deliberately not taken
+
+* the **violet outline and the pale grey canvas**: flowby is dark only, and takes structure, not palette.
+* a **flat list of every title**. flowby's sidebar offers what can apply now, and 125 rows is the thing a
+  fixed catalogue does when it has no way to hide what would refuse.
+* **thumbnails as the identity of a preset** until there is a real result to draw one from.
+
+### limits of this pass
+
+read by text and by measurement. what is *not* known: how the picker animates open, whether the list is
+grouped under hidden headers, what a click does after it (the capture never selects a row), how long a
+result takes to land, and whether the `Custom` tab is empty for a normal account (an earlier note says
+custom presets are "coming soon" for teams). the title list came from OCR over a scrolling list, so a
+few names above are best guesses at a misread (`Match aesth` is cut off, `Designer - surface cinema
+board` is probably `Designer - surface cinema board 5` or similar), and the figure of about 125 is a
+count of distinct strings after merging near-duplicates, not an official catalogue size.
