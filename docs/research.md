@@ -636,6 +636,16 @@ wiring is edited (only that it is), or any keyboard shortcut. the earlier statem
 selection-to-preset, no focus mode and no marquee select still stands, and is now joined by a shape to
 build rather than a name to argue about.
 
+## fuser's recipes index, read from the site (2026-11-13)
+
+`fuser.studio/recipes` shows 198 recipes with two facets over them (output type: 3D/audio/image/text/
+video, and ~30 categories) and, on every card, a title, an `@author`, a category, and one imperative line
+naming what you bring. Individual pages are the same six blocks: category, a name for the *result*, the
+imperative brief, `Inputs`/`Outputs` with the exposed labels and a saved example, `@author · v2`, and
+`Models in this recipe`. Their docs-facing page states the rule the version implies: a placed recipe pins
+its flow version and you adopt an update when ready, while names and labels are shared across versions.
+The contract flowby took from that, and the three refusals that came with it, are in `docs/recipes.md`.
+
 ## flora's action catalog, read from their own API (2026-11-13)
 
 With the owner signed in, `flora_search_actions` and `flora_get_action` answered directly, which is

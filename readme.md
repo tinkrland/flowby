@@ -77,8 +77,9 @@ the modules are the ideas. `dtypes.py` is the four wires and the refusal to add 
 
 seven kinds are named in `theidea/taxonomy.md` and they form a ladder: style, tool, technique,
 preset, recipe, workflow, factory, each built only from the rungs below it. of those, a **preset** is
-an object (`presets.Preset`) and a **recipe** is the dict `scene.record` returns; a **technique** is
-inlined in each preset for now, and **style**, **workflow** and **factory** are not built.
+an object (`presets.Preset`), and a **recipe** is a chain `scene.record` reads back plus what
+`recipes.Recipe` adds to it (a name for the result, a version, the inputs it exposes); a **technique**
+is inlined in each preset for now, and **style**, **workflow** and **factory** are not built.
 
 the words below are the ones actually used in the code and in `bin/flowby`. where a common word is
 deliberately **not** used, the table says so rather than smoothing it over, because two names for one
@@ -90,7 +91,9 @@ thing is how a tool starts lying about what it does.
 | **kit** | a shelf that collects the members of one craft: `analog` (cyanotype, linocut stamps, wax seals, block printing, screen print, risograph, lithograph, woodblock, etching), `handdrawn` (pencil sketch, doodle, scribbled, ballpoint, ink pen, charcoal, crayon, marker) and `textile` (the thread itself, with cross stitch and woven as subtypes under it). it builds nothing and trains nothing. | not a rung on the ladder. a listed member is a name and nothing else, and the menu prints `listed, not built yet` rather than looking pressable. |
 | **style** | trained weights, a trigger and a default strength: a look a preset takes as an input. | not a preset. it has no job of its own, and it is the only kind whose work is training rather than a node. |
 | **technique** | tools in a known order, plus the reason for that order. | not a preset: no input slot, so there is nothing to point it at. |
-| **recipe** | the chain read back. `scene.record` returns a chain with its values and its measured cost, and `scene.replay` applies it to another frame in one call. | not a second thing to store. the chain was always the recipe, which is why nothing new is written when one is recorded. |
+| **recipe** | a chain read back with the rest that makes it usable by someone else: a name for the result, a one-line brief, the inputs it exposes with their starting values, its outputs, and a version. | not a saved document. it is derived from the chain, so it cannot disagree with it; and a placement pins the version it was placed at, so improving a recipe cannot change work already on somebody's board. |
+| **pinned placement** | a recipe as a board holds it, at the version it was placed at, until somebody adopts an update. | adopt is an action, not a notification. a moved recipe refuses to run under an old pin rather than quietly running new code. |
+| **recipe version** | a short hash of what a recipe *does*: its steps, their values, their wiring, and the targets its exposed inputs feed. | prose is not in it. a rename or a better brief is not a new version, or the pin becomes noise and people learn to click through it. |
 | **template** | a word this tree does **not** use. what other tools call a template is a **preset** here (one input, one job) or a **recipe** (its own inputs and outputs). | not a synonym for either. one word spanning two rungs is exactly the blur this list exists to prevent. |
 | **sweep** | one click that comes back with several variants. the work before the swept node runs once and only the tail is copied, so six relights of one plate is one read and six renders. | not a loop, and not six runs of everything. the compiler treats it as a branch, and the cost line shows the difference. |
 | **slot** | an empty input a preset refuses to compile without: `style-transfer` needs the look it copies, `place-graphic` needs the graphic. | not an error state. it is a preset admitting it cannot fill its own inputs, and the refusal names the slot. |

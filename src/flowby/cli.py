@@ -476,35 +476,62 @@ def cmd_sidebar(args) -> int:
 
 
 def cmd_recipe(args) -> int:
+    """the chain on a board, read back as a recipe: named, versioned, with its inputs exposed."""
+    from . import recipes
     scene = demo_board()
+
+    def as_recipe(element_id: str):
+        record = scene.record(element_id)
+        if not record["steps"]:
+            return None
+        return recipes.of(record, inputs=recipes.default_inputs(record), author="the board",
+                          category=record["kind"],
+                          brief=f"{scene.elements[element_id].label}: bring your own "
+                                f"{record['kind']} and get "
+                                f"{presets.get(record['steps'][-1]['preset']).out_dtype()} back")
+
     if args.element:
         if args.element not in scene.elements:
             print(f"no element {args.element}. the board has {', '.join(scene.elements)}",
                   file=sys.stderr)
             return 2
-        recipe = scene.record(args.element)
-        if args.json:
-            print(json.dumps(recipe, indent=2))
+        made = as_recipe(args.element)
+        if made is None:
+            print(f"{scene.elements[args.element].label}: nothing applied yet")
             return 0
-        print(f"{recipe['name']}: {' -> '.join(s['preset'] for s in recipe['steps'])}")
-        print(f"  about {recipe['estimate']['minutes']} min, "
-              f"{recipe['estimate']['gpu_minutes']} of it on a gpu")
-        for step in recipe["steps"]:
+        if args.json:
+            print(json.dumps(made.panel(), indent=2))
+            return 0
+        print(f"{made.name} v{made.version}")
+        print(f"  {made.brief}")
+        for exposed in made.inputs:
+            print(f"  input  {exposed.label}: {exposed.start!r} -> {exposed.preset}.{exposed.param}")
+        print(f"  output {made.output} ({dtypes.colour(made.dtype)})")
+        print(f"  models {', '.join(made.models) if made.models else 'none: every step is procedural'}")
+        print(f"  about {made.estimate()['minutes']} min, "
+              f"{made.estimate()['gpu_minutes']} of it on a gpu")
+        for step in made.steps:
             values = ", ".join(f"{k}={v}" for k, v in step["values"].items())
             print(f"  - {step['preset']}: {values or 'defaults'}")
         return 0
-    if args.json:
-        print(json.dumps([scene.record(e) for e in scene.elements], indent=2))
-        return 0
+
+    panels = []
     for element_id in scene.elements:
-        recipe = scene.record(element_id)
+        made = as_recipe(element_id)
         label = scene.elements[element_id].label
-        if not recipe["steps"]:
-            print(f"{label}: nothing applied yet")
+        if made is None:
+            if not args.json:
+                print(f"{label}: nothing applied yet")
             continue
-        print(f"{label}: {' -> '.join(s['preset'] for s in recipe['steps'])}")
-        print(f"  about {recipe['estimate']['minutes']} min "
-              f"({recipe['estimate']['gpu_minutes']} on a gpu)")
+        if args.json:
+            panels.append(made.panel())
+            continue
+        print(f"{label}: {made.name} v{made.version}  "
+              f"{' -> '.join(step['preset'] for step in made.steps)}")
+        print(f"  input {', '.join(e.label for e in made.inputs) or 'none'} -> "
+              f"{made.output}, about {made.estimate()['minutes']} min")
+    if args.json:
+        print(json.dumps(panels, indent=2))
     return 0
 
 

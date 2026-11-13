@@ -15,6 +15,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     presets.py                  the subgraphs a slider stands in for, plus slots and estimates
     actions.py                  a node that is one file: the header declares its wires, its params and
                                 which params only apply sometimes, and the panel is read out of it
+    recipes.py                  a chain given the rest of what makes it usable by a stranger: a name for
+                                the result, a version that pins a placement, and the inputs it exposes
     scene.py                    elements as nodes with a position, the chain, and recipes
     compile.py                  the plan a shell script can run, flattened once
     modes.py                    the three doors in (freeform, fixed, style) and the
@@ -67,6 +69,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     presets.md                  how a preset is written, and what a good one has to say
     actions.md                  the code-action contract, read out of FLORA's catalog, and what flowby
                                 took from it (free utility layer, derived panel) and refused (pasted code)
+    recipes.md                  the recipe, read off Fuser's 198: a name for the result, exposed inputs,
+                                and a version a placement pins so finished work cannot change under you
     compute.md                  the routing loop, the colab seams, and the failure modes
     runs.md                     per-node history, and why the reuse key is a run and not a param
     kohya.md                    the crossing from a plan to a run: dataset, config, command, resume
