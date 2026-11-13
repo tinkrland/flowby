@@ -13,13 +13,16 @@ import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import { NodeCanvas } from "./NodeCanvas";
+import { FocusView } from "./FocusView";
+import { SelectionPill } from "./SelectionPill";
 import { GpuPlug } from "./GpuPlug";
 import { KitsMenu } from "./KitsMenu";
 import { Panel, type PlacedElement } from "./Panel";
 import { CommandBar, Toolbar, type BarMode } from "./Chrome";
 import * as gesture from "./gesture.mjs";
 import * as intake from "./intake.mjs";
-import { commandRows, executeState } from "./nodeui.mjs";
+import { commandRows, executeState, isTunable } from "./nodeui.mjs";
+import { pill as pillOf } from "./selection.mjs";
 
 type GraphDocument = {
   title: string;
@@ -37,7 +40,12 @@ function App() {
   const [bar, setBar] = useState<BarMode | null>(null);
   const [ran, setRan] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [locked, setLocked] = useState<string[]>([]);
+  const [more, setMore] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const depth = useRef(0);
+  const board = useRef<{ duplicate: (ids: string[]) => string[]; remove: (ids: string[]) => void } | null>(null);
 
   // what arrives by drop or paste goes through the same classification as the panel. a file that
   // cannot be taken is reported by name, and nothing is dropped without a word.
@@ -102,6 +110,35 @@ function App() {
       .catch((problem: Error) => setError(`run npm run graph. ${problem.message}`));
   }, []);
 
+  // what the pill says about the current selection, decided by selection.mjs and not by this file
+  const pill = pillOf(selected, doc ? doc.pipeline.nodes : [], { locked, tunable: isTunable });
+
+  const act = (name: string) => {
+    if (!pill.count) return;
+    if (name === "focus") { setFocus(true); return; }
+    if (name === "lock") {
+      const all = pill.chosen.every((n) => locked.includes(n.id));
+      const ids = pill.chosen.map((n) => n.id);
+      setLocked((held) => (all ? held.filter((id) => !ids.includes(id)) : [...new Set([...held, ...ids])]));
+      setNote(all ? `unlocked ${ids.length} node${ids.length === 1 ? "" : "s"}` : `locked ${ids.length} node${ids.length === 1 ? "" : "s"}: they will not move`);
+      return;
+    }
+    if (name === "duplicate") {
+      const ids = pill.chosen.map((n) => n.id);
+      const made = board.current?.duplicate(ids) ?? [];
+      setSelected(made);
+      setNote(`copied ${made.length} node${made.length === 1 ? "" : "s"} on the board. python does not know about the copies yet`);
+      return;
+    }
+    if (name === "delete") {
+      const ids = pill.chosen.map((n) => n.id);
+      board.current?.remove(ids);
+      setSelected([]);
+      setLocked((held) => held.filter((id) => !ids.includes(id)));
+      setNote(`took ${ids.length} node${ids.length === 1 ? "" : "s"} off the board. python still has them until the board is reloaded`);
+    }
+  };
+
   if (error) return <p style={{ padding: 16, color: "#f87171" }}>{error}</p>;
   if (!doc) return <p style={{ padding: 16, color: "#71717a" }}>reading the graph…</p>;
 
@@ -122,9 +159,12 @@ function App() {
           {doc.pipeline.nodes.length} nodes, {doc.pipeline.wires.length} wires
           {placed.length > 0 && `, ${placed.length} added by hand`}
         </span>
+        <span title="camera zoom" style={{ marginLeft: "auto", color: "#71717a", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
+          {Math.round(zoom * 100)}%
+        </span>
         <button
           onClick={() => setPanelOpen((open) => !open)}
-          style={{ marginLeft: "auto", background: "#27272a", color: "#e4e4e7", border: 0, borderRadius: 8, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
+          style={{ background: "#27272a", color: "#e4e4e7", border: 0, borderRadius: 8, padding: "6px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
         >
           new node
         </button>
@@ -147,8 +187,11 @@ function App() {
       >
         <NodeCanvas
           pipeline={doc.pipeline}
-          onSelect={setSelected}
+          onSelect={(ids) => { setSelected(ids); if (!ids.length) setMore(false); }}
           onQuickConnect={(drop) => setBar({ kind: "connect", ...drop })}
+          locked={locked}
+          onZoom={setZoom}
+          board={board}
         />
         <Toolbar
           execute={executeState(selected, Object.fromEntries(doc.pipeline.nodes.map((n: any) => [n.id, n])))}
@@ -156,6 +199,32 @@ function App() {
           onOpenBar={() => setBar({ kind: "all" })}
           onAddType={() => setPanelOpen(true)}
         />
+        {pill.visible && (
+          <SelectionPill
+            model={pill}
+            onAction={act}
+            moreOpen={more}
+            onMore={setMore}
+            onMorePick={(name) => {
+              if (name === "copy") {
+                const ids = pill.chosen.map((n) => n.id);
+                navigator.clipboard?.writeText(ids.join("\n")).then(
+                  () => setNote(`copied ${ids.length} id${ids.length === 1 ? "" : "s"}`),
+                  () => setNote("this browser would not let the page copy"),
+                );
+              }
+              setMore(false);
+            }}
+          />
+        )}
+        {focus && pill.visible && (
+          <FocusView
+            model={pill}
+            run={{ label: "run", enabled: false, because: "the worker is not connected to this page" }}
+            onRun={() => `would run ${pill.count} node${pill.count === 1 ? "" : "s"}: the worker is not connected to this page`}
+            onClose={() => setFocus(false)}
+          />
+        )}
         {bar && menu && (
           <CommandBar
             rows={commandRows(menu)}
@@ -175,7 +244,7 @@ function App() {
             </span>
           </div>
         )}
-        {ran && <div role="status" style={{ position: "absolute", left: "50%", bottom: 68, transform: "translateX(-50%)", zIndex: 11, background: "#121214", color: "#a1a1aa", border: "1px solid #1c1c1f", borderRadius: 10, padding: "6px 12px", fontSize: 12 }}>{ran} <button onClick={() => setRan(null)} aria-label="dismiss" style={{ background: "none", border: 0, color: "#71717a", cursor: "pointer" }}>×</button></div>}
+        {ran && <div role="status" style={{ position: "absolute", left: "50%", bottom: 118, transform: "translateX(-50%)", zIndex: 11, background: "#121214", color: "#a1a1aa", border: "1px solid #1c1c1f", borderRadius: 10, padding: "6px 12px", fontSize: 12 }}>{ran} <button onClick={() => setRan(null)} aria-label="dismiss" style={{ background: "none", border: 0, color: "#71717a", cursor: "pointer" }}>×</button></div>}
         {note && (
           <div role="status" style={{ position: "absolute", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 11, background: "#121214", color: "#e4e4e7", border: "1px solid #1c1c1f", borderRadius: 10, padding: "8px 14px", fontSize: 13, maxWidth: 560 }}>
             {note} <button onClick={() => setNote(null)} aria-label="dismiss" style={{ background: "none", border: 0, color: "#71717a", cursor: "pointer" }}>×</button>

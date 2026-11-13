@@ -22,6 +22,7 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  SelectionMode,
   applyNodeChanges,
   type NodeChange,
   getBezierPath,
@@ -92,9 +93,15 @@ export type NodeCanvasProps = {
   onQuickConnect?: (drop: { side: "in" | "out"; dtype: string; role: string | null; x: number; y: number }) => void;
   /** pictures to show as a card's body, by node id. */
   previews?: Record<string, string>;
+  /** ids the user locked. a locked node does not move, but it can still be selected and wired. */
+  locked?: string[];
+  /** the board's camera zoom, so the chrome can print the readout fuser keeps in its top bar. */
+  onZoom?: (zoom: number) => void;
+  /** two verbs the selection pill offers. board edits only: python does not hear about them yet. */
+  board?: React.MutableRefObject<{ duplicate: (ids: string[]) => string[]; remove: (ids: string[]) => void } | null>;
 };
 
-export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect, onFocusNode, previews }: NodeCanvasProps) {
+export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect, onFocusNode, previews, locked, onZoom, board }: NodeCanvasProps) {
   // only the one method used, so the ref does not depend on the library's generics over our edge shape
   const instance = useRef<{ setViewport: (viewport: { x: number; y: number; zoom: number }, options?: { duration?: number }) => unknown } | null>(null);
   const pane = useRef<HTMLDivElement | null>(null);
@@ -114,14 +121,50 @@ export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect,
   }, [flow]);
   const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((all) => applyNodeChanges(changes, all)), []);
 
+  // a locked node is not draggable. it is a flag on the node, not a second copy of the graph: the
+  // lock is a view preference, like position, and python never hears of either.
+  const held = useMemo(() => new Set(locked ?? []), [locked]);
+  const shown = useMemo(() => nodes.map((n) => ({ ...n, draggable: !held.has(n.id) })), [nodes, held]);
+  // a wire whose node was removed from the board must not be drawn to a card that is not there
+  const gone = useMemo(() => {
+    const here = new Set(nodes.map((n) => n.id));
+    return new Set(flow.nodes.filter((n: any) => !here.has(n.id)).map((n: any) => n.id));
+  }, [nodes, flow]);
+
+  // duplicate and remove stay on the board. they are handed out through a ref so the pill can call
+  // them without either file owning the other. a duplicate is a copy of the card, offset, with its
+  // wires left behind: copying wires would silently double a connection python still thinks is one.
+  useEffect(() => {
+    if (!board) return;
+    board.current = {
+      duplicate: (ids: string[]) => {
+        const pick = new Set(ids);
+        const made: string[] = [];
+        setNodes((all) => {
+          const copies = all
+            .filter((n) => pick.has(n.id))
+            .map((n, i) => {
+              const id = `${n.id}~copy-${all.length + i}`;
+              made.push(id);
+              return { ...n, id, selected: false, position: { x: n.position.x + 28, y: n.position.y + 28 }, data: { ...n.data, label: `${n.data?.label ?? n.id} copy` } };
+            });
+          return [...all, ...copies];
+        });
+        return made;
+      },
+      remove: (ids: string[]) => setNodes((all) => all.filter((n) => !ids.includes(n.id))),
+    };
+    return () => { board.current = null; };
+  }, [board]);
+
   return (
     <LazyMotion features={domAnimation} strict>
       <ReactFlow
         ref={pane}
         colorMode="dark"
-        nodes={nodes}
+        nodes={shown}
         onNodesChange={onNodesChange}
-        edges={flow.edges}
+        edges={flow.edges.filter((e: any) => !gone.has(e.source) && !gone.has(e.target))}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
@@ -143,6 +186,10 @@ export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect,
         snapToGrid
         snapGrid={[8, 8]}
         panOnScroll
+        // box-select is the left drag, as in fuser; panning keeps the wheel and the right button
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        panOnDrag={[1, 2]}
         // the board is the product: dragging a node is a view preference, not data, so it stays
         // local until positions are something python is willing to store
         nodesDraggable
@@ -159,6 +206,7 @@ export function NodeCanvas({ pipeline, onCameraChange, onSelect, onQuickConnect,
           onQuickConnect?.({ side: side as "in" | "out", dtype: port.dtype, role: port.role ?? null, x: pt.clientX, y: pt.clientY });
         }}
         onMove={(_event: unknown, viewport: Viewport) => {
+          onZoom?.(viewport.zoom);
           onCameraChange?.(
             cameraFromTldraw({
               x: viewport.x,

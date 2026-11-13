@@ -637,6 +637,11 @@ class Scene:
                            for p, s in node.inputs.items()},
                 "outputs": {p: {"dtype": s.dtype, "role": s.role}
                             for p, s in node.outputs.items()},
+                # what this node costs, from the same `requires` the compiler sums. the node layer
+                # needs it because a selection is a proposal and its price belongs next to it:
+                # fuser puts the credits of a selection in its floating pill (docs/research.md).
+                "cost": {"minutes": round(node.minutes(), 3),
+                         "gpu": bool(node.requires.get("gpu"))},
             })
         wires = [
             {
