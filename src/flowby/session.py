@@ -23,6 +23,7 @@ import threading
 from dataclasses import dataclass
 
 from . import presets as presetmod
+from . import runs
 from .presets import PresetRefused
 from .scene import KIND_DTYPE, Scene, SceneRefused
 from .store import Store, StoreRefused
@@ -58,6 +59,9 @@ class Session:
         self._redo: list[Scene] = []
         self._lock = threading.RLock()
         self.version = 0  # bumps on every change, so a page can tell a stale view from a current one
+        # per-node history. it sits beside the scene rather than inside it: undo reverts the board,
+        # and a run that happened still happened.
+        self.runs = runs.Book()
 
     # -- the one way anything changes ----------------------------------------------------------
 
@@ -167,6 +171,47 @@ class Session:
             return self.view(Receipt("redo", "redid it", []))
 
     # -- what the page reads -----------------------------------------------------------------
+
+    # -- per-node history ----------------------------------------------------------------------
+
+    def record_run(self, node_id: str, *, state: str = runs.OK, minutes: float = 0.0,
+                   artifacts=(), note: str = "") -> dict:
+        """file one run against the node's current signature.
+
+        the signature is read here rather than passed in, so a run can only ever be filed against what
+        the node is being asked for now. that is what keeps the history usable as a reuse key instead of
+        a wish about the past.
+        """
+        with self._lock:
+            if node_id not in self.scene.graph.nodes:
+                raise SessionRefused(f"{node_id!r} is not on this board")
+            sigs = runs.signatures(self.scene.graph, self.runs)
+            run = self.runs.record(node_id, sigs[node_id], state=state, minutes=minutes,
+                                   artifacts=artifacts, note=note)
+            return {"run": run.as_dict(), "version": self.version}
+
+    def work(self, targets: list[str] | None = None) -> dict:
+        """what a run would execute now, and what it would stand on."""
+        with self._lock:
+            return runs.work(self.scene.graph, self.runs, targets)
+
+    def history(self, element_id: str | None = None) -> dict:
+        """every node's history, or one element's."""
+        with self._lock:
+            if element_id is None:
+                return {"nodes": self.runs.as_dict(),
+                        "stale": runs.stale(self.scene.graph, self.runs)}
+            if element_id not in self.scene.elements:
+                raise SessionRefused(f"{element_id!r} is not on this board")
+            book = runs.element_runs(self.scene.graph, self.runs,
+                                     self.scene._nodes_for(self.scene.elements[element_id]))
+            return {"element": element_id, "nodes": book,
+                    "stale": [n for n, held in book.items() if held["stale"]]}
+
+    def sidebar(self, element_id: str) -> dict:
+        """the contextual panel, with the history of the nodes that put this element on the board."""
+        with self._lock:
+            return self.scene.sidebar(element_id, book=self.runs)
 
     def view(self, receipt: Receipt | None = None) -> dict:
         """the whole board as the renderer reads it, with the version it is at."""

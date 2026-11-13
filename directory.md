@@ -23,6 +23,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
                                 and the dashboard's artifacts tab
     styles.py                   the one trained kind: a corpus gate, a lifecycle, a colab training plan,
                                 and the limits on stacking styles
+    runs.py                     per-node run history, and the key one run is filed under: the runs
+                                an input came from, so a re-run upstream is never skipped below it
     kohya.py                    a gated style's colab run as files: the dataset and its captions, the
                                 toml, and illustrace's t4 command with the reason for each flag
     job.py                      a plan's life, its illegal moves, its artifacts, its watchdog
@@ -54,6 +56,7 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
   docs/
     presets.md                  how a preset is written, and what a good one has to say
     compute.md                  the routing loop, the colab seams, and the failure modes
+    runs.md                     per-node history, and why the reuse key is a run and not a param
     kohya.md                    the crossing from a plan to a run: dataset, config, command, resume
     style-example.json          a corpus the kohya command accepts, so the seam can be run by hand
     frontend.md                 two canvases, one camera, and why the toggle is cheap

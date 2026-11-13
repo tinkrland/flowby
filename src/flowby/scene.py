@@ -13,7 +13,7 @@ a new node.
 
 from dataclasses import dataclass, field
 
-from . import dtypes, presets
+from . import dtypes, presets, runs
 from .graph import Graph, GraphRefused, Node, Port
 
 KIND_DTYPE = {
@@ -485,8 +485,12 @@ class Scene:
         instance.detached = True
         return instance
 
-    def sidebar(self, element_id: str) -> dict:
-        """what the contextual panel shows when an element is clicked."""
+    def sidebar(self, element_id: str, book=None) -> dict:
+        """what the contextual panel shows when an element is clicked.
+
+        `book` is optional and the panel is honest either way: with no book there is no history to show,
+        and the field is present and empty rather than absent, so a page never has to guess.
+        """
         element = self._element(element_id)
         applicable = []
         rendered = self.rendered_dtype(element_id)
@@ -533,7 +537,14 @@ class Scene:
                 "history": list(element.history),
             },
             "presets": applicable,
+            "runs": runs.element_runs(self.graph, book, self._nodes_for(element)) if book else {},
         }
+
+    def _nodes_for(self, element) -> list[str]:
+        """the graph nodes a preset put on the board for this element, in board order."""
+        instance_ids = {inst.id for inst in self.instances.values() if element.id in inst.elements}
+        return [node_id for node_id in self.graph.topo()
+                if self.graph.nodes[node_id].instance in instance_ids]
 
     # -- recipes -----------------------------------------------------------
 

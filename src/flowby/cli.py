@@ -159,6 +159,68 @@ def cmd_kohya(args) -> int:
     return 0
 
 
+def cmd_runs(args) -> int:
+    """per-node history, and what the next run would actually execute."""
+    from . import runs as runs_mod
+
+    scene = demo_board()
+    book = runs_mod.Book()
+    # the demo board has not been run by anyone, so the honest book is empty and every node is stale.
+    # the command exists to show that, and to show the reuse arithmetic once a run is filed.
+    work = runs_mod.work(scene.graph, book, args.node or None)
+    payload = {"work": work, "stale": runs_mod.stale(scene.graph, book),
+               "runs": book.as_dict()}
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    print(f"{len(scene.graph.nodes)} nodes, {len(payload['runs'])} with a history")
+    print(f"next run: {len(work['run'])} to execute, {len(work['reuse'])} reused, "
+          f"{work['minutes']} min")
+    for node_id in work["order"]:
+        detail = work["detail"][node_id]
+        mark = "run " if detail["verdict"] == "run" else "reuse"
+        why = detail.get("because", "")
+        print(f"  {mark} {node_id:38} {why}")
+    return 0
+
+
+def cmd_run(args) -> int:
+    """file a run against a node, so the history and the reuse arithmetic have something real in them.
+
+    this is the seam the app layer drives when a job finishes; the cli exposes it so the rule can be
+    exercised without a browser, and so a person can see a reuse instead of taking it on trust.
+    """
+    from . import runs as runs_mod
+
+    scene = demo_board()
+    book = runs_mod.Book()
+    if args.node not in scene.graph.nodes:
+        print(f"refused: {args.node!r} is not on this board", file=sys.stderr)
+        return 1
+    if args.all:
+        for node_id in scene.graph.topo():
+            fed = {port: (book.last_ok(source).id if book.last_ok(source) else None)
+                   for port, source in runs_mod.upstream_of(scene.graph, node_id).items()}
+            book.record(node_id, runs_mod.signature(scene.graph.nodes[node_id], fed),
+                        minutes=scene.graph.nodes[node_id].minutes())
+        ran = sorted(book.runs)
+    else:
+        sigs = runs_mod.signatures(scene.graph, book)
+        book.record(args.node, sigs[args.node], minutes=scene.graph.nodes[args.node].minutes())
+        ran = [args.node]
+    work = runs_mod.work(scene.graph, book)
+    payload = {"recorded": ran, "work": work, "runs": book.as_dict()}
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    print(f"recorded {len(ran)} run{'s' if len(ran) != 1 else ''}: {', '.join(ran)}")
+    print(f"next run: {len(work['run'])} to execute, {len(work['reuse'])} reused, "
+          f"{work['minutes']} min")
+    for node_id in work["run"] or ():
+        print(f"  run  {node_id:38} {work['detail'][node_id].get('because', '')}")
+    return 0
+
+
 def cmd_serve(args) -> int:
     """run the bridge: the board a page talks to, and the gpus plugged into it."""
     import signal
@@ -474,6 +536,15 @@ def build_parser() -> argparse.ArgumentParser:
     kohya.add_argument("--kohya", default="/content/sd-scripts", help="where the colab session clones sd-scripts")
     kohya.add_argument("--base", default="flux.1-dev", help="only flux.1-dev has a proven argv")
     kohya.set_defaults(func=cmd_kohya)
+    runs_cmd = subs.add_parser("runs", help="per-node history, and what the next run would execute")
+    runs_cmd.add_argument("--node", action="append", help="limit to one node, and what it consumes")
+    runs_cmd.set_defaults(func=cmd_runs)
+
+    run_cmd = subs.add_parser("run", help="file a run against a node, and show what that makes stale")
+    run_cmd.add_argument("node", help="the node that ran")
+    run_cmd.add_argument("--all", action="store_true", help="run the whole board, upstream first")
+    run_cmd.set_defaults(func=cmd_run)
+
     serve = subs.add_parser("serve", help="run the bridge a page talks to (loopback only unless told otherwise)")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)

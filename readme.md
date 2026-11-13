@@ -64,6 +64,8 @@ bin/flowby plan --preset animate-composition --set duration=8
 bin/flowby routes                  every route, its ceiling, its gates
 bin/flowby fit --preset animate-composition
 bin/flowby emit --preset sketch-to-mesh --out plan.json
+bin/flowby runs                    per-node history, and what a run would execute now
+bin/flowby run sketch-1 --all      file the whole board, then watch everything become reusable
 bin/flowby kohya docs/style-example.json --write out/kohya-run
 bin/flowby doctor
 ```
