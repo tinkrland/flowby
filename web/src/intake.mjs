@@ -35,6 +35,7 @@ export function sniff(bytes) {
   if (is(0x52, 0x49, 0x46, 0x46) && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "webp";
   if (is(0x50, 0x4b, 0x03, 0x04) || is(0x50, 0x4b, 0x05, 0x06)) return "zip";
   if (is(0x67, 0x6c, 0x54, 0x46)) return "glb";
+  if (is(0x38, 0x42, 0x50, 0x53)) return "psd";   // 8BPS: a layered document, read by psd.mjs
   if (is(0x25, 0x50, 0x44, 0x46)) return "pdf";
   if (b.length > 12 && b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) {
     const brand = String.fromCharCode(b[8], b[9], b[10], b[11]);
@@ -58,6 +59,7 @@ const TYPES = Object.freeze({
   mp4:  { kind: "video", via: "direct" },
   webm: { kind: "video", via: "direct" },
   glb:  { kind: "model", via: "direct" },
+  psd:  { kind: "image", via: "layers", note: "each visible layer becomes an element of its own, in its place" },
   zip:  { kind: null, via: "unpack", note: "a zip is opened and each image inside is taken" },
   pdf:  { kind: null, via: "refuse", note: "pdf pages are not read here. export the page as png and drop that" },
 });

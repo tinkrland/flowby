@@ -18,6 +18,7 @@ import { SelectionPill } from "./SelectionPill";
 import { GpuPlug } from "./GpuPlug";
 import { KitsMenu } from "./KitsMenu";
 import { Viewer } from "./Viewer";
+import { boardPlan, psdLayers, FIDELITY as PSD_FIDELITY } from "./psd.mjs";
 import { isNarrow, viewerRows } from "./viewer.mjs";
 import { Panel, type PlacedElement } from "./Panel";
 import { CommandBar, type BarMode } from "./Chrome";
@@ -77,6 +78,35 @@ function App() {
         try {
           const { files: inner } = intake.unpackZip(f.bytes, unzipSync);
           for (const i of inner) { try { elements.push(await intake.toElement(i)); } catch { /* listed below */ } }
+        } catch (e) { refused.push({ name: f.name, reason: (e as Error).message }); }
+        continue;
+      }
+      if (intake.sniff(f.bytes) === "psd") {
+        // a layered document is not one element. each layer that has a place becomes one, and the note
+        // says what was left behind, so an import that dropped half a file cannot look complete.
+        try {
+          const { readPsd } = await import("ag-psd");
+          const tree = psdLayers(readPsd(f.bytes, { skipThumbnail: true }));
+          const plan = boardPlan(tree);
+          for (const layer of plan.place) {
+            const canvas = layer.kind === "image" ? layer.raw?.canvas ?? null : null;
+            const dataUrl = canvas ? canvas.toDataURL("image/png") : null;
+            elements.push({
+              kind: layer.text ? "text" : "image",
+              label: layer.name,
+              asset: dataUrl ?? `psd:${f.name}#${layer.id}`,
+              bytes: f.bytes.length,
+              sniffed: "psd",
+              via: "layers",
+              warning: layer.kind === "image" && !dataUrl ? "the layer's pixels did not come back" : null,
+              source: {
+                from: "psd", name: f.name, layer: layer.id, path: layer.path ?? null,
+                box: { x: layer.x, y: layer.y, w: layer.w, h: layer.h },
+                effects: layer.effects ?? [],
+              },
+            } as PlacedElement);
+          }
+          setNote(`${f.name}: ${plan.summary}. ${PSD_FIDELITY.psd}`);
         } catch (e) { refused.push({ name: f.name, reason: (e as Error).message }); }
         continue;
       }

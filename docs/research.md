@@ -987,3 +987,67 @@ verified by DOM measurement in headless chrome, not by eye (integration credits 
 the canvas is present and the list is absent; at 390px the canvas is absent, the list has **7 rows**,
 the first row reads `the owl / element.sketch / free`, the total reads **5.4 min across 7 nodes**, which
 agrees with python's own sum, and there is no horizontal overflow and no clipped row.
+
+## bridgette: the import bridges, read to build psd import (2026-11-13)
+
+`arsoninstigator/bridgette` is the owner's own repo, and it is the right shape for this: every domain
+is `source reader -> shared model -> target writer`, with a readme that says what each crossing drops.
+
+* `designs/` (imported from `kqrla/porter`) reads figma frames, psd, ai and eps into one `LayerNode`
+  tree, and writes psd, svg, sketch, tiff, png and json back out. `ag-psd` (MIT) does the psd.
+* the two ideas taken: the **layer tree** (`id, name, kind, path, depth, visible, effects, box`) and
+  the **editable policy** (`locked / partial / customizable` plus flags for text, image, fill, stroke,
+  position). a layer that looks editable and is not is worse than one that says it is locked.
+* what was not taken: the writers. flowby's job ends at elements on a board, not at another file, and
+  promising a psd round trip would be a claim nothing here could keep.
+
+built from it: `web/src/psd.mjs` (walk + `boardPlan` + `FIDELITY`), `intake.sniff` recognises the
+`8BPS` magic rather than the extension, and a dropped psd becomes one element per visible layer with a
+place on the canvas. `ag-psd` is a dependency now (MIT, 31.x). fifteen tests, including one that writes
+a layered psd with `writePsdBuffer`, reads it back and plans the board from the real bytes.
+
+two honest findings from that test, both of which changed the code:
+
+1. **ag-psd does not restore a text layer's size.** left and top come back, right and bottom return
+   equal to them, so `w` and `h` read zero. so the plan reports `null` for an unsized layer and the host
+   measures the words; placing a 0x0 card would have been a silent way to lose the text.
+2. **a layer with no pixel data is a shape, not an image.** a psd whose layers carry no channel bytes
+   yields `shape` layers, and `boardPlan` counts those rather than placing empty boxes.
+
+### what illustrace's decoupling means for our style transfer
+
+`tinkrland/illustrace` argues that "style similarity: 0.81" is a meaningless number, because style is
+not one thing: mark-making, shape language, colour language, texture and rendering are separable, and a
+transfer should move **one factor** while proving the others did not move.
+
+* each transfer declares what must change and what must not, and returns a **delta vector across every
+  factor**; the claim is a measured sentence, not a slider position.
+* the target is a vector, not a strength: `{"stroke_roughness": 0.8, "palette": 0.0}`.
+* stylebench underneath checks six things, and the two that matter here are *preserve non-requested
+  attributes* and *prevent reference-content leakage*, which is exactly the failure flowby's
+  `style-transfer` preset would inherit from a diffusion model left to its own judgement.
+
+so the shape this implies for flowby is a change to `style-transfer` rather than a new preset: its
+sliders become a factor vector, and its output carries a delta so the board can say "moved stroke
+roughness 91%, colour changed 4%". not built, and the measurement half is the expensive part; recorded
+here because it is a better contract than the one we have.
+
+### vectary's preset families, as a backlog (not built)
+
+from the 20-second picker clip, the families flowby does not have yet, in the order they are worth
+building. the three at the top now exist as of this commit.
+
+* **recolour to a palette** -> `swatch-swap`, `palette-9`. built.
+* **view** (top, left, right, front) -> `view-ortho`. built.
+* **exploded view, detach** -> needs `mesh.explode` before `view-ortho`, and a real mesh to explode.
+* **remove reflections, improve lighting, night shot** -> `light.grade` variants; the ops exist and the
+  difference between them is a parameter, which is what a control is for.
+* **match pose, match proportions, match view** -> `pose.estimate` plus a comparison read; the honest
+  blocker is that nothing here can yet say how far off the match is.
+* **interior - vacant / pristine / paint job / clean up** -> `clear-interior` exists; the other three
+  are scope variants of it.
+* **make tileable, upscale 2x, edge cleanup, correct proportions** -> arithmetic on pixels, so they
+  belong in the browser module next to `swatch.mjs`, not in a worker.
+* **describe, critique** (image -> words) -> a text-producing preset, which this tree has only one of.
+* **design variations with a count in the name** (`16 design variations`) -> the sweep already does
+  this; what is missing is putting the count in the sidebar's label, as noted on 2026-11-13.

@@ -172,7 +172,7 @@ export function Panel({ onPlace, onClose }: Props) {
             style={{ ...box, borderStyle: "dashed", borderColor: over ? C.accent : "#3f3f46", padding: 24, textAlign: "center", color: C.dim, cursor: "pointer" }}
           >
             drop files here, or click to choose
-            <div style={{ color: C.mute, fontSize: 11, marginTop: 6 }}>png, jpeg, webp, gif, avif, svg, mp4, webm, glb, or a zip of images</div>
+            <div style={{ color: C.mute, fontSize: 11, marginTop: 6 }}>png, jpeg, webp, gif, avif, svg, psd, mp4, webm, glb, or a zip of images</div>
           </div>
           <input ref={input} type="file" multiple hidden onChange={(e) => e.target.files && void accept(e.target.files)} />
 
