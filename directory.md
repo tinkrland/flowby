@@ -29,7 +29,9 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
                                 toml, and illustrace's t4 command with the reason for each flag
     job.py                      a plan's life, its illegal moves, its artifacts, its watchdog
     hub.py                      the fan-out to every board that is open, with replay
-    kits.py                     preset kits: a shelf of styles and subtypes (analog, textile). listed until built
+    kits.py                     preset kits: a shelf of styles and subtypes (analog, handdrawn, textile). listed until built
+    flora.py                    the one door that takes a stranger's POST: a signed flora webhook, checked on
+                                the raw bytes inside a five-minute window, with no secret meaning no entry
     store.py                    bytes by digest: content-addressed, verified on write and on read, atomic
     session.py                  the board a page talks to: every action runs on a copy, so a refusal changes nothing
     server.py                   the only file that speaks http: strict about origin, content type and size
@@ -61,6 +63,7 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     compute.md                  the routing loop, the colab seams, and the failure modes
     runs.md                     per-node history, and why the reuse key is a run and not a param
     kohya.md                    the crossing from a plan to a run: dataset, config, command, resume
+    flora-webhooks.md           the flora door: what is checked, in what order, and what 202 means
     style-example.json          a corpus the kohya command accepts, so the seam can be run by hand
     frontend.md                 two canvases, one camera, and why the toggle is cheap
     research.md                 what vectary canvas and fuser already know, and what was taken

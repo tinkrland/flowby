@@ -35,11 +35,13 @@ stdlib only, like the rest of the python side: http.server with threads.
 from __future__ import annotations
 
 import json
+import os
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
+from . import flora as floramod
 from . import kits as kitmod
 from . import plug as plugmod
 from . import presets as presetmod
@@ -210,6 +212,25 @@ def make_server(session: Session, host: str = "127.0.0.1", port: int = 0,
                 except StoreRefused as problem:
                     return self._refuse(422, str(problem))
                 return self._json(200, {"digest": digest, "bytes": len(body)})
+
+            if path == "/api/flora/webhook":
+                # flora signs what it sends, so the raw bytes are read and checked before any json is
+                # parsed. a parsed body has already lost the exact bytes the signature covers, and that
+                # is the one mistake this route exists to not make.
+                body = self._read(JSON_LIMIT)
+                if body is None:
+                    return
+                try:
+                    secret = floramod.secret_from(os.environ)
+                    event = floramod.verify(body, self.headers.get(floramod.SIGNATURE_HEADER), secret)
+                    accepted = floramod.delivery_id(event)
+                except floramod.NoSecret as problem:
+                    # our fault, not the sender's: nothing here can vouch for anything yet
+                    return self._refuse(503, str(problem))
+                except floramod.Refused as problem:
+                    return self._refuse(400, str(problem))
+                # 202, not 200: the delivery is believed, and nothing has been fetched or marked done
+                return self._json(202, {"accepted": accepted, "event": event})
 
             plug_routes = {
                 "/api/plugs/add": lambda f: self._plug_add(f),

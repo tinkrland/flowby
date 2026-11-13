@@ -88,6 +88,68 @@ class Reading(Base):
         self.assertEqual(len(members), sum(len(kit.members) for kit in kits.KITS.values()))
         self.assertTrue(all(m["state"] == "listed" and m["runnable"] is False for m in members))
 
+    def test_the_flora_door_believes_a_signed_delivery_and_nothing_else(self):
+        """the route in one place: signed in, tampered out, unsigned out, and a 202 rather than a 200.
+
+        the secret comes from the environment at request time, so this sets it for the test and puts
+        back whatever was there. a delivery older than the replay window is refused by the module, and
+        the module's own tests cover the arithmetic; what is checked here is that the route reads the
+        RAW bytes and hands the right answers back.
+        """
+        import os
+        import time
+        from flowby import flora
+
+        secret = "whsec_for_this_test_only"
+        before = os.environ.get("FLORA_WEBHOOK_SECRET")
+        os.environ["FLORA_WEBHOOK_SECRET"] = secret
+        try:
+            body = json.dumps({"id": "whd_1", "type": "run.completed", "data": {"run_id": "run_1"}}).encode()
+            stamp = int(time.time())
+            good = f"t={stamp},v1={flora.signature_for(stamp, body, secret)}"
+
+            status, answer, _ = self.live.call("POST", "/api/flora/webhook", raw=body,
+                                               headers={"Content-Type": "application/json", "Flora-Signature": good})
+            self.assertEqual(status, 202)
+            self.assertEqual(answer["accepted"], "whd_1")
+            self.assertEqual(answer["event"]["data"]["run_id"], "run_1")
+
+            # the bytes the signature covers, not the json they mean: re-spacing changes the bytes and
+            # must be refused, because otherwise the signature would be checking a document nobody sent
+            respaced = body.replace(b'"id": "whd_1",', b'"id":   "whd_1",')
+            status, answer, _ = self.live.call("POST", "/api/flora/webhook", raw=respaced,
+                                               headers={"Content-Type": "application/json", "Flora-Signature": good})
+            self.assertEqual(status, 400)
+            self.assertIn("does not match", answer["refused"])
+
+            status, answer, _ = self.live.call("POST", "/api/flora/webhook", raw=body,
+                                               headers={"Content-Type": "application/json"})
+            self.assertEqual(status, 400)
+            self.assertIn("unsigned", answer["refused"])
+        finally:
+            if before is None:
+                os.environ.pop("FLORA_WEBHOOK_SECRET", None)
+            else:
+                os.environ["FLORA_WEBHOOK_SECRET"] = before
+
+    def test_the_flora_door_says_so_when_it_has_no_secret_instead_of_opening(self):
+        import os
+        from flowby import flora
+
+        before = {name: os.environ.get(name) for name in flora.SECRET_VARS}
+        for name in flora.SECRET_VARS:
+            os.environ.pop(name, None)
+        try:
+            body = b'{"id": "whd_2", "type": "run.completed", "data": {"run_id": "run_2"}}'
+            status, answer, _ = self.live.call("POST", "/api/flora/webhook", raw=body,
+                                               headers={"Content-Type": "application/json", "Flora-Signature": "t=1,v1=" + "0" * 64})
+            self.assertEqual(status, 503)
+            self.assertIn("no signing secret", answer["refused"])
+        finally:
+            for name, value in before.items():
+                if value is not None:
+                    os.environ[name] = value
+
     def test_an_unknown_route_is_a_404_with_a_sentence(self):
         for method in ("GET", "POST"):
             status, body, _ = self.live.call(method, "/api/nothing", body={} if method == "POST" else None)

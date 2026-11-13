@@ -99,6 +99,7 @@ thing is how a tool starts lying about what it does.
 | **plug** | a gpu you rent, added with an endpoint and a token. the token goes in and never comes back out. | not connected because it was typed in. it reads `connected` only after a health check answers, and private or metadata addresses are refused. |
 | **route** | where a plan runs, and what that place honestly cannot do: `local`, `colab-browserbase`, `runpod-serverless`, `replicate`. | not a preference. `routes.fit` refuses a plan that will not survive the place it was going, before a browser is opened. |
 | **door** | freeform, fixed, style: the three first moves. | not three products. every door reaches every other, and `tests/selftest.py` performs each crossing. |
+| **door** | an endpoint something else can post to: `/api/flora/webhook`, answered by `flowby.flora`. | not believed because it arrived. a delivery is accepted only on the raw bytes, inside a five-minute window, against the workspace's `whsec_` signing secret, and a missing secret refuses (503) rather than opening. |
 | **factory** | a workflow plus a trigger, a queue, a budget and a reviewer. | not built, and deliberately last: no human in the loop is a cost decision before it is a feature. |
 
 ## the four wires, and the fifth thing that does not get a colour
