@@ -17,6 +17,8 @@ import { FocusView } from "./FocusView";
 import { SelectionPill } from "./SelectionPill";
 import { GpuPlug } from "./GpuPlug";
 import { KitsMenu } from "./KitsMenu";
+import { Viewer } from "./Viewer";
+import { isNarrow, viewerRows } from "./viewer.mjs";
 import { Panel, type PlacedElement } from "./Panel";
 import { CommandBar, Toolbar, type BarMode } from "./Chrome";
 import * as gesture from "./gesture.mjs";
@@ -29,6 +31,19 @@ type GraphDocument = {
   pipeline: { nodes: any[]; wires: any[] };
 };
 
+/** the board is an editor above 760px and a viewer below it. fuser draws the same line at tablet. */
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && isNarrow(window.innerWidth));
+  useEffect(() => {
+    const query = window.matchMedia(`(max-width: ${760 - 1}px)`);
+    const onChange = () => setNarrow(isNarrow(window.innerWidth));
+    query.addEventListener("change", onChange);
+    window.addEventListener("resize", onChange);
+    return () => { query.removeEventListener("change", onChange); window.removeEventListener("resize", onChange); };
+  }, []);
+  return narrow;
+}
+
 function App() {
   const [doc, setDoc] = useState<GraphDocument | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -38,6 +53,7 @@ function App() {
   const [menu, setMenu] = useState<any[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [bar, setBar] = useState<BarMode | null>(null);
+  const narrow = useNarrow();
   const [ran, setRan] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [locked, setLocked] = useState<string[]>([]);
@@ -185,20 +201,26 @@ function App() {
           await take(files);
         }}
       >
-        <NodeCanvas
-          pipeline={doc.pipeline}
-          onSelect={(ids) => { setSelected(ids); if (!ids.length) setMore(false); }}
-          onQuickConnect={(drop) => setBar({ kind: "connect", ...drop })}
-          locked={locked}
-          onZoom={setZoom}
-          board={board}
-        />
-        <Toolbar
-          execute={executeState(selected, Object.fromEntries(doc.pipeline.nodes.map((n: any) => [n.id, n])))}
-          onExecute={() => setRan(`would run ${selected.length} node${selected.length === 1 ? "" : "s"}: the worker is not connected to this page`)}
-          onOpenBar={() => setBar({ kind: "all" })}
-          onAddType={() => setPanelOpen(true)}
-        />
+        {narrow ? (
+          <Viewer rows={viewerRows(doc.pipeline.nodes)} title={doc.title} />
+        ) : (
+          <NodeCanvas
+            pipeline={doc.pipeline}
+            onSelect={(ids) => { setSelected(ids); if (!ids.length) setMore(false); }}
+            onQuickConnect={(drop) => setBar({ kind: "connect", ...drop })}
+            locked={locked}
+            onZoom={setZoom}
+            board={board}
+          />
+        )}
+        {!narrow && (
+          <Toolbar
+            execute={executeState(selected, Object.fromEntries(doc.pipeline.nodes.map((n: any) => [n.id, n])))}
+            onExecute={() => setRan(`would run ${selected.length} node${selected.length === 1 ? "" : "s"}: the worker is not connected to this page`)}
+            onOpenBar={() => setBar({ kind: "all" })}
+            onAddType={() => setPanelOpen(true)}
+          />
+        )}
         {pill.visible && (
           <SelectionPill
             model={pill}

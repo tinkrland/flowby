@@ -857,3 +857,133 @@ custom presets are "coming soon" for teams). the title list came from OCR over a
 few names above are best guesses at a misread (`Match aesth` is cut off, `Designer - surface cinema
 board` is probably `Designer - surface cinema board 5` or similar), and the figure of about 125 is a
 count of distinct strings after merging near-duplicates, not an official catalogue size.
+
+## fuser's compositor, from the feature page and its docs (2026-11-13)
+
+read at `fuser.studio/features/compositor` and `docs.fuser.studio/docs/compositor` and four of its
+child pages. both serve clean **markdown** when `.md` is appended to the URL, which is how this was
+read; nothing here was seen, only read, so no layout or motion claims.
+
+### what it is
+
+a full-screen editor that lives **inside one node**. click `Edit` on a Compositor node, get layers left,
+canvas centre, eight-tool floating toolbar, context-aware properties right, then `Save` commits the
+scene as the node's output and `Exit` returns to the flow. the earlier note in this file said the
+compositor was "not taken" because "flowby has a frame and a scene already". that call stands for the
+**editor**, which is a Figma-sized build (see the count below), but it was too quick about the rule the
+editor exists to enforce, which is the interesting part and is recorded next.
+
+### the rule: the scene is the source of truth, and inputs do not recompute geometry
+
+this is the load-bearing sentence in the docs, and it is a refutation of the thing flowby currently
+does:
+
+> if you reconnect a different image to a Compositor input, the layer it represents keeps its existing
+> position, size and rotation. the new image just replaces the pixel source. the first input you ever
+> connect sets the canvas dimensions; later input changes don't resize the canvas.
+
+so a compositor node is **stateful**. the graph feeds it pixels; it owns geometry. re-running upstream,
+swapping a generation, A/B testing a model: the layout does not move. and the escape hatch is explicit:
+`splitting an image into layers` turns a connected input into editable scene layers, after which "later
+upstream changes will not overwrite that split group". pinning is a deliberate act, not a default.
+
+in flowby the same property is true for a different reason: geometry lives on the **board** (tldraw
+elements with transforms), and the graph only reads it. so "your layout doesn't shift when the pixels
+change" already holds, and the price is paid in a licence instead of a scene object. that is worth
+writing down because it is the clearest example yet of tldraw's non-commercial licence buying something
+real: fuser built a scene object to get the rule, and flowby rented one.
+
+### downstream output is not export
+
+the compositor emits **the scene** on its socket. Image, Video and other Compositor nodes render that
+scene themselves, live, with their own play/pause/scrub, and two compositors chain without re-encoding.
+export (`Save Asset`: PNG at canvas size, or MP4 from `0:00` to `Duration`) is only for getting a file
+out. the docs state the distinction twice, which suggests users conflate them constantly.
+
+a scene is therefore a **candidate fifth wire type** in flowby's terms, and the four-colour rule says a
+fifth thing gets a `role`, not a colour. scene-as-role-on-image is the consistent answer, since what
+travels downstream is renderable pixels plus an editable stack, and the editable part is not a wire.
+
+### the size of the thing, counted
+
+* **twelve layer types**: rectangle, ellipse, vector, raster, eraser mask, text, image, video, 3D,
+  adjustments, and **nested compositors** (the docs list groups separately, as an organising feature).
+* **eight tools**, each with a one-key shortcut: select `V`, hand `H`, rectangle `R`, ellipse `O`,
+  text `T`, pen `P`, brush `B`, eraser `E`. the pen's four point types map onto Figma's vocabulary
+  (corner, smooth, asymmetric, auto with Catmull-Rom).
+* **groups** parent layers with visibility, lock, opacity, blend and transform cascading to children;
+  nesting allowed; grouping requires a common parent.
+* **three masks**, chosen by what drives the reveal and by scope: per-layer alpha (a shape as a window),
+  per-layer luminance (white shows, black hides, grey partly), and a **global alpha mask** for the whole
+  scene (a circular preview, a custom frame, a TV-style mask).
+* **variable fonts**: a text layer adjusts weight, width and optical size with sliders, and individual
+  axes can be **animated** for a looping morph. this is the fontasy overlap, and it is the second product
+  in this file to treat a font's axes as animatable state rather than a static choice.
+* **3D**: import glTF/GLB with PBR materials, control rotation and scale in the canvas.
+* **timeline**: only renders when the scene holds video or a non-zero `Duration`. several video layers
+  share one clock, the longest sets the scene length unless overridden, and each video layer has its own
+  independent `Loop`.
+* **raster persistence**: painted pixels go to the project's media library and the scene records a
+  reference, so project files stay small and scenes load asynchronously. an export waits for an
+  in-flight upload; an inference node downstream may not.
+* **multiplayer**: live cursors and selections, and **only one person may edit a given compositor at a
+  time** (others see who has it open). with collaborators present, a minute idle closes the editor with
+  a toast, saving first.
+* **desktop and tablet only.** on a phone, compositor nodes "still display their output, but you can't
+  open the editor."
+
+### what i would take, and what i would not
+
+**taken:**
+
+1. **the desktop-only editor rule.** this is the answer to the defect measured on 2026-11-12: flowby's
+   board opens at **21% zoom** on a 390px screen, which is unreadable before you select anything. fuser
+   does not solve a phone canvas; it declines to open the editor there and keeps showing output. a phone
+   is allowed to be a viewer. that is the cheapest honest fix available to flowby and it is in this
+   build (see the note at the end of this file).
+2. **a mask is a role, not a colour.** the three mask concepts fit flowby's existing rule exactly: an
+   image wire with `role: mask`, with per-layer and global scope as a property of the consuming node.
+   no fifth wire, no new palette entry.
+3. **split-into-layers as the pin.** the idea that an input becomes editable the moment you say so, and
+   stops being overwritten, is a better mental model than "detach" and costs one flag.
+4. **variable-font axes as animatable state**, which is the same slope fontasy is already on.
+
+**not taken:**
+
+* the **editor itself**: twelve layer types, eight tools, groups, pen handles, blend modes, timeline and
+  export is a product, not a preset system's side panel, and flowby's board already owns the geometry
+  this editor exists to own.
+* **scenes as a stored artefact with async media references.** flowby has no media library and no
+  storage layer yet; copying the persistence model without the storage would be a lie in the shape of an
+  architecture.
+* **multiplayer**, for the same reason: presence is a backend feature and flowby has no accounts.
+
+### the correction this page forced
+
+the earlier entry said the compositor was "not taken: flowby has a frame and a scene already". the
+second half was wrong in a useful way: flowby has a **board**, which is not the same as a scene that a
+node owns and edits. the board is shared and always visible; fuser's scene is the output of one node. so
+the honest statement is not "we have this already", it is "we get the layout-survives-swap property from
+tldraw instead, and we do not have a node whose output is an editable stack". that distinction is now in
+the vocabulary table's scope, since `board preset` is the only thing in flowby that currently reaches
+across more than one frame.
+
+### the note this build acted on: a phone is a viewer
+
+the compositor page settles the defect measured on 2026-11-12. fuser does not try to make its editor
+work on a phone; it keeps showing output and refuses to open the editor. flowby now does the same at
+**760px**, the width fuser draws its own line at (tablet and up):
+
+* `web/src/viewer.mjs` holds the rule and the words, and `web/tests/viewer.test.mjs` holds them still
+  (nine tests, and eight mutations of the rule that the tests catch: an inclusive boundary, a string
+  width being trusted, `unknown` reading as `free`, a cost block with no number reading as known, the
+  total hiding its unknowns, and rows dropping nodes that have no cost).
+* `Viewer.tsx` draws the graph as text: one row per node in graph order, the label, the op, one bar per
+  rounded-up minute (violet when the node needs a gpu, grey otherwise), and the same price the pill
+  would charge. the total is a **floor** and says so: `5.4 min at least, 2 not counted`.
+* the toolbox is not drawn either, because "add node" with no canvas is a button that lies.
+
+verified by DOM measurement in headless chrome, not by eye (integration credits are spent): at 1500px
+the canvas is present and the list is absent; at 390px the canvas is absent, the list has **7 rows**,
+the first row reads `the owl / element.sketch / free`, the total reads **5.4 min across 7 nodes**, which
+agrees with python's own sum, and there is no horizontal overflow and no clipped row.
