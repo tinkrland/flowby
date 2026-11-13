@@ -37,3 +37,29 @@ being asked for now, never against a stale key.
 
 Nothing in this module executes, measures or estimates a run. A run is recorded by whoever performed it,
 and a node with no runs says so by having none.
+
+## the history outlives the process
+
+`Book.save(path)` writes the whole book atomically (temp file, `fsync`, `os.replace`), and
+`Book.load(path)` reads one back under protest: every run is checked, so a state that is not a state, a
+missing signature or a signature that is not a sha256 is refused with one sentence instead of being
+trusted. A half-written history is worse than none, because it would answer "already done" for a node
+whose record was cut off.
+
+The command line carries it across processes:
+
+```
+bin/flowby run sketch-1 --all --book out/runs.json    # file a whole board, and keep it
+bin/flowby inspector --book out/runs.json             # the panel's payload, reading that book
+bin/flowby runs --book out/runs.json                  # the table, same book
+```
+
+`npm run graph` picks `out/runs.json` up when it exists, so the web panel shows real history when there
+is any and an honest empty one when there is not.
+
+## the panel
+
+`bin/flowby --json inspector` is the seam the board reads, beside `--json graph`. The panel opens when
+exactly one node is selected, because a panel that could only describe one node has no business being
+open for five. What it says is decided in `web/src/inspector.mjs` and tested under node:
+`web/src/Inspector.tsx` only draws it.

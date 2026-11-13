@@ -26,7 +26,9 @@ from dataclasses import dataclass, field
 from . import graph as G
 
 
-MAX_RUNS = 20  # per node. a history is for reading and reusing, not an archive
+MAX_RUNS = 20  # per node. a history is for reading and reusing, not an archive.
+BOOK_KIND = "flowby.runs"
+BOOK_VERSION = 1
 OK, FAILED = "ok", "failed"
 STATES = (OK, FAILED)
 
@@ -141,6 +143,79 @@ class Book:
             if run.signature == sig and run.state == OK:
                 return run
         return None
+
+    # -- outliving the process ---------------------------------------------------------------
+
+    def save(self, path: str) -> str:
+        """write the history where the next process can read it.
+
+        atomic, like the store: a half-written book is worse than no book, because it would answer
+        "this has run" for a node whose record was cut off mid-write.
+        """
+        import os
+        import tempfile
+
+        body = {"kind": BOOK_KIND, "version": BOOK_VERSION, "made": self.made,
+                "runs": {node: [run.as_dict() for run in held]
+                         for node, held in sorted(self.runs.items())}}
+        folder = os.path.dirname(os.path.abspath(path))
+        os.makedirs(folder, exist_ok=True)
+        handle, temp = tempfile.mkstemp(dir=folder, prefix=".runs-", suffix=".json")
+        try:
+            with os.fdopen(handle, "w", encoding="utf-8") as out:
+                json.dump(body, out, indent=1, sort_keys=True)
+                out.flush()
+                os.fsync(out.fileno())
+            os.replace(temp, path)
+        except BaseException:
+            if os.path.exists(temp):
+                os.unlink(temp)
+            raise
+        return path
+
+    @classmethod
+    def load(cls, path: str, clock=time.time, keep: int = MAX_RUNS) -> "Book":
+        """read a history back, and refuse one that does not hold up rather than trusting it.
+
+        a run is a claim that something happened, so every field is checked: a state that is not a
+        state, a missing signature, or a signature that is not a sha256 all mean the file is not this
+        file, and the caller gets one sentence instead of a board that quietly lies.
+        """
+        with open(path, encoding="utf-8") as handle:
+            try:
+                raw = json.load(handle)
+            except json.JSONDecodeError as problem:
+                raise RunsRefused(f"{path} is not json: {problem}") from problem
+        if not isinstance(raw, dict) or raw.get("kind") != BOOK_KIND:
+            raise RunsRefused(f"{path} is not a run history: it does not say {BOOK_KIND}")
+        if raw.get("version") != BOOK_VERSION:
+            raise RunsRefused(f"{path} is version {raw.get('version')!r}, and this flowby reads "
+                              f"{BOOK_VERSION}")
+        book = cls(clock=clock, keep=keep)
+        book.made = int(raw.get("made") or 0)
+        for node, held in (raw.get("runs") or {}).items():
+            if not isinstance(held, list):
+                raise RunsRefused(f"{path}: {node} holds something that is not a list of runs")
+            for entry in held:
+                book._adopt(node, entry)
+        return book
+
+    def _adopt(self, node: str, entry: dict) -> Run:
+        """take one run from a file, after checking it is one."""
+        if not isinstance(entry, dict):
+            raise RunsRefused(f"{node}: a run in the file is not a record")
+        sig = entry.get("signature")
+        if not isinstance(sig, str) or len(sig) != 64 or any(c not in "0123456789abcdef" for c in sig):
+            raise RunsRefused(f"{node}: a run's signature is not a sha256")
+        run = Run(node=node, signature=sig, state=entry.get("state", OK),
+                  minutes=entry.get("minutes") or 0.0, artifacts=entry.get("artifacts") or (),
+                  note=entry.get("note") or "", at=float(entry.get("at") or 0.0),
+                  id=str(entry.get("id") or ""))
+        held = self.runs.setdefault(node, [])
+        held.append(run)
+        if len(held) > self.keep:
+            del held[: len(held) - self.keep]
+        return run
 
     def empty(self) -> bool:
         return not self.runs

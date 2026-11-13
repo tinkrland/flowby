@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import sys
+import time
 
 from . import compile as compiler
 from . import catalogue
@@ -159,13 +160,79 @@ def cmd_kohya(args) -> int:
     return 0
 
 
+def _book(path):
+    """the history this command should use: a file when one is named, a fresh book otherwise."""
+    from . import runs as runs_mod
+
+    if not path:
+        return runs_mod.Book()
+    try:
+        return runs_mod.Book.load(path, clock=time.time)
+    except FileNotFoundError:
+        # a path that is not there yet is a book with nothing in it, not an error: the first run
+        # writes it
+        return runs_mod.Book(clock=time.time)
+    except runs_mod.RunsRefused as problem:
+        # a history that does not hold up is worse than none: it would answer "already done" for a
+        # node whose record was cut off. refuse the file, not the board.
+        print(f"refused: {problem}", file=sys.stderr)
+        raise SystemExit(1) from problem
+
+
+def cmd_inspector(args) -> int:
+    """the contextual panel's payload: one entry per node, with its history and its verdict.
+
+    this is the seam the web board reads, the way `graph` is the seam the canvas reads. it carries no
+    geometry and no styling: what is stale, what would be reused, and what each node last did.
+    """
+    from . import runs as runs_mod
+
+    scene = demo_board()
+    book = _book(args.book)
+    work = runs_mod.work(scene.graph, book)
+    nodes = {}
+    for node_id in scene.graph.topo():
+        node = scene.graph.nodes[node_id]
+        held = book.runs_for(node_id)
+        nodes[node_id] = {
+            "id": node_id,
+            "op": node.op,
+            "label": node.label,
+            "instance": node.instance,
+            "params": dict(node.params),
+            "minutes": round(node.minutes(), 3),
+            "gpu": bool(node.requires.get("gpu")),
+            "runs": [run.as_dict() for run in reversed(held)],
+            "count": len(held),
+            "verdict": work["detail"][node_id]["verdict"],
+            "because": work["detail"][node_id].get("because", ""),
+        }
+    payload = {
+        "kind": "flowby.inspector",
+        "scene": scene.id,
+        "title": scene.title,
+        "book": args.book or None,
+        "work": {"run": work["run"], "reuse": work["reuse"], "minutes": work["minutes"],
+                 "targets": work["targets"]},
+        "nodes": nodes,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    for node_id, entry in nodes.items():
+        print(f"{entry['verdict']:5} {node_id:38} {entry['count']} runs  {entry['minutes']} min")
+    print(f"next run: {len(work['run'])} to execute, {len(work['reuse'])} reused, {work['minutes']} min")
+    return 0
+
+
 def cmd_runs(args) -> int:
     """per-node history, and what the next run would actually execute."""
     from . import runs as runs_mod
 
     scene = demo_board()
-    book = runs_mod.Book()
-    # the demo board has not been run by anyone, so the honest book is empty and every node is stale.
+    book = _book(args.book)
+    # with no --book the book is empty: the demo board has not been run by anyone, and every node is
+    # stale, which is what the command says rather than inventing a past.
     # the command exists to show that, and to show the reuse arithmetic once a run is filed.
     work = runs_mod.work(scene.graph, book, args.node or None)
     payload = {"work": work, "stale": runs_mod.stale(scene.graph, book),
@@ -193,7 +260,7 @@ def cmd_run(args) -> int:
     from . import runs as runs_mod
 
     scene = demo_board()
-    book = runs_mod.Book()
+    book = _book(args.book)
     if args.node not in scene.graph.nodes:
         print(f"refused: {args.node!r} is not on this board", file=sys.stderr)
         return 1
@@ -209,7 +276,10 @@ def cmd_run(args) -> int:
         book.record(args.node, sigs[args.node], minutes=scene.graph.nodes[args.node].minutes())
         ran = [args.node]
     work = runs_mod.work(scene.graph, book)
-    payload = {"recorded": ran, "work": work, "runs": book.as_dict()}
+    if args.book:
+        book.save(args.book)
+    payload = {"recorded": ran, "work": work, "runs": book.as_dict(),
+               "book": args.book or None}
     if args.json:
         print(json.dumps(payload, indent=2))
         return 0
@@ -538,12 +608,18 @@ def build_parser() -> argparse.ArgumentParser:
     kohya.set_defaults(func=cmd_kohya)
     runs_cmd = subs.add_parser("runs", help="per-node history, and what the next run would execute")
     runs_cmd.add_argument("--node", action="append", help="limit to one node, and what it consumes")
+    runs_cmd.add_argument("--book", help="read the history from this file")
     runs_cmd.set_defaults(func=cmd_runs)
 
     run_cmd = subs.add_parser("run", help="file a run against a node, and show what that makes stale")
     run_cmd.add_argument("node", help="the node that ran")
     run_cmd.add_argument("--all", action="store_true", help="run the whole board, upstream first")
+    run_cmd.add_argument("--book", help="keep this run in this file, and read the rest from it")
     run_cmd.set_defaults(func=cmd_run)
+
+    inspect_cmd = subs.add_parser("inspector", help="the contextual panel's payload, one entry per node")
+    inspect_cmd.add_argument("--book", help="read the history from this file")
+    inspect_cmd.set_defaults(func=cmd_inspector)
 
     serve = subs.add_parser("serve", help="run the bridge a page talks to (loopback only unless told otherwise)")
     serve.add_argument("--host", default="127.0.0.1")

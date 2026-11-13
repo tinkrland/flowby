@@ -15,6 +15,8 @@ import { createRoot } from "react-dom/client";
 import { NodeCanvas } from "./NodeCanvas";
 import { FocusView } from "./FocusView";
 import { SelectionPill } from "./SelectionPill";
+import { Inspector } from "./Inspector";
+import { panel, summary } from "./inspector.mjs";
 import { GpuPlug } from "./GpuPlug";
 import { KitsMenu } from "./KitsMenu";
 import { Viewer } from "./Viewer";
@@ -35,6 +37,9 @@ type GraphDocument = {
   title: string;
   pipeline: { nodes: any[]; wires: any[] };
 };
+
+/** `bin/flowby --json inspector`: one entry per node, with its history and python's verdict. */
+type InspectorDocument = { nodes: Record<string, any>; work: any };
 
 /** the board is an editor above 760px and a viewer below it. fuser draws the same line at tablet. */
 function useNarrow() {
@@ -66,6 +71,10 @@ function App() {
   const [more, setMore] = useState(false);
   const [focus, setFocus] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [inspect, setInspect] = useState<InspectorDocument | null>(null);
+  // one node selected opens its panel. the id is held rather than derived from the selection, so
+  // selecting a second node does not silently swap what the panel is about mid-read.
+  const [panelFor, setPanelFor] = useState<string | null>(null);
   const depth = useRef(0);
   const board = useRef<{ duplicate: (ids: string[]) => string[]; remove: (ids: string[]) => void } | null>(null);
 
@@ -161,6 +170,12 @@ function App() {
       })
       .then(setDoc)
       .catch((problem: Error) => setError(`run npm run graph. ${problem.message}`));
+    // the history is optional: a board with no book is a board whose nodes have never run, and the
+    // panel says exactly that rather than refusing to open
+    fetch("/inspector.json")
+      .then((response) => (response.ok ? response.json() : null))
+      .then(setInspect)
+      .catch(() => setInspect(null));
   }, []);
 
   // what the pill says about the current selection, decided by selection.mjs and not by this file
@@ -235,7 +250,13 @@ function App() {
         ) : (
           <NodeCanvas
             pipeline={doc.pipeline}
-            onSelect={(ids) => { setSelected(ids); if (!ids.length) setMore(false); }}
+            onSelect={(ids) => {
+              setSelected(ids);
+              if (!ids.length) setMore(false);
+              // one node: show it. many nodes, or none: the pill is the right surface, not a panel
+              // that could only describe one of them
+              setPanelFor(ids.length === 1 ? ids[0] : null);
+            }}
             onQuickConnect={(drop) => setBar({ kind: "connect", ...drop })}
             locked={locked}
             onZoom={setZoom}
@@ -270,6 +291,11 @@ function App() {
             }} />
           ) : null}
         </Rail>
+        {panelFor && inspect && (() => {
+          const model = panel(panelFor, inspect);
+          if (!model) return null;
+          return <Inspector model={model} board={summary(inspect)} onClose={() => setPanelFor(null)} />;
+        })()}
         {pill.visible && (
           <SelectionPill
             model={pill}

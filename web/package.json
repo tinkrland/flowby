@@ -5,7 +5,7 @@
   "type": "module",
   "description": "the board: tldraw for the spatial layer, react-three-fiber for the 3d elements, @xyflow for the node layer, one camera",
   "scripts": {
-    "graph": "../bin/flowby --json graph > public/graph.json && ../bin/flowby --json presets > public/presets.json",
+    "graph": "../bin/flowby --json graph > public/graph.json && ../bin/flowby --json presets > public/presets.json && ../bin/flowby --json inspector $([ -f ../out/runs.json ] && echo \"--book ../out/runs.json\") > public/inspector.json",
     "dev": "npm run graph && vite",
     "build": "npm run graph && tsc --noEmit && vite build",
     "test": "node --test tests/*.test.mjs"

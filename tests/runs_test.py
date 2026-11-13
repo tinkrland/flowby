@@ -5,6 +5,8 @@ keyed on the runs it was fed, not on the parameters of the nodes feeding it, so 
 never silently skipped below. a test suite that only did the first would pass on a stale cache.
 """
 
+import json
+import os
 import unittest
 
 from flowby import cli, graph, runs
@@ -275,6 +277,88 @@ class Through_the_session(unittest.TestCase):
         self.session.undo()
         self.assertEqual(len(self.session.scene.graph.nodes), before)
         self.assertEqual(self.session.history()["nodes"][node][0]["minutes"], 2.0)
+
+
+class The_book_on_disk(unittest.TestCase):
+    """a history that outlives the process, and refuses to be read when it does not hold up."""
+
+    def setUp(self):
+        import tempfile
+        self.folder = tempfile.mkdtemp()
+        self.path = os.path.join(self.folder, "runs.json")
+        self.graph = cli.demo_board().graph
+
+    def _filed(self):
+        from flowby import runs
+        book = runs.Book(clock=lambda: 10.0)
+        for node_id in self.graph.topo():
+            fed = {port: (book.last_ok(source).id if book.last_ok(source) else None)
+                   for port, source in runs.upstream_of(self.graph, node_id).items()}
+            book.record(node_id, runs.signature(self.graph.nodes[node_id], fed),
+                        minutes=self.graph.nodes[node_id].minutes())
+        return book
+
+    def test_a_saved_book_answers_the_next_process_the_same(self):
+        from flowby import runs
+        filed = self._filed()
+        filed.save(self.path)
+        back = runs.Book.load(self.path)
+        self.assertEqual(runs.stale(self.graph, back), runs.stale(self.graph, filed))
+        self.assertEqual(runs.work(self.graph, back)["minutes"], runs.work(self.graph, filed)["minutes"])
+        self.assertEqual(sum(len(v) for v in back.runs.values()), len(self.graph.nodes))
+
+    def test_a_run_kept_across_processes_is_not_run_again(self):
+        from flowby import runs
+        filed = self._filed()
+        filed.save(self.path)
+        again = runs.work(self.graph, runs.Book.load(self.path))
+        self.assertEqual(again["run"], [])
+
+    def test_a_half_written_file_is_refused_rather_than_trusted(self):
+        from flowby import runs
+        with open(self.path, "w", encoding="utf-8") as out:
+            out.write('{"kind": "flowby.runs", "version": 1, "runs": {"a": [')
+        with self.assertRaises(runs.RunsRefused):
+            runs.Book.load(self.path)
+
+    def test_a_file_that_is_not_a_book_is_refused(self):
+        from flowby import runs
+        with open(self.path, "w", encoding="utf-8") as out:
+            out.write('{"nodes": []}')
+        with self.assertRaises(runs.RunsRefused) as caught:
+            runs.Book.load(self.path)
+        # refused for the right reason: a file that never said it was a run history, not one with a
+        # version this flowby happens not to read
+        self.assertIn("not a run history", str(caught.exception))
+
+    def test_a_signature_that_is_not_a_sha256_is_refused(self):
+        from flowby import runs
+        with open(self.path, "w", encoding="utf-8") as out:
+            out.write(json.dumps({"kind": "flowby.runs", "version": 1,
+                                  "runs": {"a": [{"id": "a#1", "signature": "nope"}]}}))
+        with self.assertRaises(runs.RunsRefused) as caught:
+            runs.Book.load(self.path)
+        self.assertIn("sha256", str(caught.exception))
+
+    def test_a_book_from_a_future_version_is_refused_in_one_sentence(self):
+        from flowby import runs
+        with open(self.path, "w", encoding="utf-8") as out:
+            out.write(json.dumps({"kind": "flowby.runs", "version": 99, "runs": {}}))
+        with self.assertRaises(runs.RunsRefused) as caught:
+            runs.Book.load(self.path)
+        self.assertIn("99", str(caught.exception))
+
+    def test_saving_leaves_no_temporary_file_behind(self):
+        self._filed().save(self.path)
+        self.assertEqual(sorted(os.listdir(self.folder)), ["runs.json"])
+
+    def test_the_cap_survives_a_round_trip(self):
+        from flowby import runs
+        book = runs.Book(clock=lambda: 1.0, keep=2)
+        for _ in range(5):
+            book.record("a", "0" * 64)
+        book.save(self.path)
+        self.assertEqual(len(runs.Book.load(self.path).runs["a"]), 2)
 
 
 if __name__ == "__main__":

@@ -45,6 +45,9 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     src/useAlignedCamera.ts     the react binding around it (designed, not built)
     src/graph.mjs               python's graph -> @xyflow nodes and edges, laid out by dagre
     src/anim.mjs                the motion spec: stagger, springs, draw-in, reduced motion
+    src/inspector.mjs           what the contextual panel says about one node: its history, its
+                                verdict, and what a run of it would cost (tested under node)
+    src/Inspector.tsx           the panel itself: the drawing only, mounted when one node is selected
     src/wires.mjs               the four wire colours, mirrored from dtypes.py and tested
     src/NodeCanvas.tsx          the node layer: two node shapes, one edge shape, borrowed canvas
     src/main.tsx                the dev harness, which draws whatever `flowby graph` wrote
