@@ -636,6 +636,17 @@ wiring is edited (only that it is), or any keyboard shortcut. the earlier statem
 selection-to-preset, no focus mode and no marquee select still stands, and is now joined by a shape to
 build rather than a name to argue about.
 
+## flora's action catalog, read from their own API (2026-11-13)
+
+With the owner signed in, `flora_search_actions` and `flora_get_action` answered directly, which is
+better evidence than any marketing page. 42 prebuilt actions, every one `charged_cost: 0`, every one a
+single code file whose header annotations (`@flora-name`, `-inputs`, `-outputs`, `-params` with `min`/
+`max`/`step`/`visibleIf`) *are* its node definition. 19 run `python` (ffmpeg on files), 23 run
+`javascript` with a `-browser` suffix (canvas/shader). The contract and what flowby took from it are in
+`docs/actions.md`. The five names in the "Effects & looks" menu (Risograph, Halftone, Datamosh, Y2K VHS,
+Line hatching) match Fuser's Tools list verbatim and return nothing from FLORA's action search, so that
+menu is most likely Fuser's creative-code family.
+
 ## flora, read from its public site and docs (2026-11-13)
 
 flora (florafauna.ai, now flora.ai) needs a login for the app, but its marketing site and its whole

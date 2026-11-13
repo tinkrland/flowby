@@ -338,6 +338,49 @@ def cmd_presets(args) -> int:
     return 0
 
 
+def cmd_actions(args) -> int:
+    """the shelf: every action in a directory, what it takes, and that it is free."""
+    from . import actions as actionmod
+    try:
+        shelf = actionmod.shelf(args.dir)
+    except actionmod.ActionRefused as problem:
+        print(f"refused: {problem}")
+        return 1
+    if args.json:
+        print(json.dumps({name: {"runtime": a.runtime, "means": a.means, "minutes": a.minutes,
+                                 "inputs": [{"name": p.name, "dtype": p.dtype} for p in a.inputs],
+                                 "outputs": [{"name": p.name, "dtype": p.dtype} for p in a.outputs],
+                                 "params": [{"key": p.key, "kind": p.kind, "default": p.default} for p in a.params]}
+                          for name, a in shelf.items()}, indent=2))
+        return 0
+    print(f"{'action':14} {'runtime':10} {'wires':20} {'params':>6} {'minutes':>7}  what it does")
+    for name, action in shelf.items():
+        wires = ",".join(f"{p.dtype}" for p in action.inputs) + "->" + ",".join(p.dtype for p in action.outputs)
+        print(f"{name:14} {action.runtime:10} {wires:20} {len(action.params):>6} {action.minutes:>7.1f}  {action.means}")
+    print("\nevery action here is code, so a run costs nothing and takes seconds. the header in each file "
+          "is the whole contract: name, wires, params and which params only apply sometimes.")
+    return 0
+
+
+def cmd_action(args) -> int:
+    """one action's panel: the controls a page would draw, with the conditional ones marked."""
+    from . import actions as actionmod
+    try:
+        shelf = actionmod.shelf(args.dir)
+        if args.name not in shelf:
+            print(f"refused: there is no action called {args.name!r}: the shelf has {', '.join(shelf)}")
+            return 1
+        values = json.loads(args.values) if args.values else None
+        print(json.dumps(shelf[args.name].panel(values), indent=2))
+    except actionmod.ActionRefused as problem:
+        print(f"refused: {problem}")
+        return 1
+    except ValueError as problem:
+        print(f"refused: --values is not json ({problem})")
+        return 1
+    return 0
+
+
 def cmd_legend(args) -> int:
     if args.json:
         print(json.dumps({"wires": dtypes.palette(), "roles": dict(dtypes.ROLES)}, indent=2))
@@ -561,6 +604,17 @@ def build_parser() -> argparse.ArgumentParser:
     subs.add_parser("presets", help="the preset menu").set_defaults(func=cmd_presets)
     subs.add_parser("kits", help="the preset kits, and how far each member really is").set_defaults(func=cmd_kits)
     subs.add_parser("legend", help="the four wires").set_defaults(func=cmd_legend)
+
+    acts = subs.add_parser("actions", help="the shelf of code actions, and what each one takes")
+    acts.add_argument("--dir", default="actions")
+    acts.add_argument("--json", action="store_true")
+    acts.set_defaults(func=cmd_actions)
+
+    act = subs.add_parser("action", help="one action's panel, as the sidebar would draw it")
+    act.add_argument("name")
+    act.add_argument("--dir", default="actions")
+    act.add_argument("--values", help="json overrides, e.g. '{\"cell\": 10}'")
+    act.set_defaults(func=cmd_action)
     cat = subs.add_parser("catalogue", help="the brief's tool list, and what each one became")
     cat.add_argument("--json", action="store_true")
     cat.set_defaults(func=cmd_catalogue)

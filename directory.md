@@ -13,6 +13,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     dtypes.py                   the four wires, the roles that ride green, and the refusal to coerce
     graph.py                    nodes, typed ports, wires, cycles, topological order
     presets.py                  the subgraphs a slider stands in for, plus slots and estimates
+    actions.py                  a node that is one file: the header declares its wires, its params and
+                                which params only apply sometimes, and the panel is read out of it
     scene.py                    elements as nodes with a position, the chain, and recipes
     compile.py                  the plan a shell script can run, flattened once
     modes.py                    the three doors in (freeform, fixed, style) and the
@@ -57,9 +59,14 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
     tests/graph.test.mjs        the seam: palette drift, dangling wires, layout, overlaps
     tests/anim.test.mjs         the spec, including that reduced motion means none
     tests/dark.test.mjs         dark only: no light theme, no toggle, near-black page
+  actions/
+    halftone.py                 dots, angles and colour modes: a brightness screen, image -> image
+    risograph.py                two spot plates off register, and the only-if-two-inks controls
   tests/selftest.py             the suite: stdlib only, no network, no gpu
   docs/
     presets.md                  how a preset is written, and what a good one has to say
+    actions.md                  the code-action contract, read out of FLORA's catalog, and what flowby
+                                took from it (free utility layer, derived panel) and refused (pasted code)
     compute.md                  the routing loop, the colab seams, and the failure modes
     runs.md                     per-node history, and why the reuse key is a run and not a param
     kohya.md                    the crossing from a plan to a run: dataset, config, command, resume
