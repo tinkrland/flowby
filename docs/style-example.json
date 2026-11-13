@@ -1,0 +1,68 @@
+{
+ "id": "s1",
+ "label": "harbour wash",
+ "trigger": "mzqtlv",
+ "base": "flux-dev",
+ "items": [
+  {
+   "name": "img_00.png",
+   "caption": "mzqtlv, a view of a harbour number 0",
+   "subject": "a harbour"
+  },
+  {
+   "name": "img_01.png",
+   "caption": "mzqtlv, a view of a bridge number 1",
+   "subject": "a bridge"
+  },
+  {
+   "name": "img_02.png",
+   "caption": "mzqtlv, a view of a garden number 2",
+   "subject": "a garden"
+  },
+  {
+   "name": "img_03.png",
+   "caption": "mzqtlv, a view of a market number 3",
+   "subject": "a market"
+  },
+  {
+   "name": "img_04.png",
+   "caption": "mzqtlv, a view of a harbour number 4",
+   "subject": "a harbour"
+  },
+  {
+   "name": "img_05.png",
+   "caption": "mzqtlv, a view of a bridge number 5",
+   "subject": "a bridge"
+  },
+  {
+   "name": "img_06.png",
+   "caption": "mzqtlv, a view of a garden number 6",
+   "subject": "a garden"
+  },
+  {
+   "name": "img_07.png",
+   "caption": "mzqtlv, a view of a market number 7",
+   "subject": "a market"
+  },
+  {
+   "name": "img_08.png",
+   "caption": "mzqtlv, a view of a harbour number 8",
+   "subject": "a harbour"
+  },
+  {
+   "name": "img_09.png",
+   "caption": "mzqtlv, a view of a bridge number 9",
+   "subject": "a bridge"
+  },
+  {
+   "name": "img_10.png",
+   "caption": "mzqtlv, a view of a garden number 10",
+   "subject": "a garden"
+  },
+  {
+   "name": "img_11.png",
+   "caption": "mzqtlv, a view of a market number 11",
+   "subject": "a market"
+  }
+ ]
+}

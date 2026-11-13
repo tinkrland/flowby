@@ -106,6 +106,59 @@ def cmd_kits(args) -> int:
     return 0
 
 
+def _style_from_file(path: str):
+    """a style read from json, because nothing persists styles yet and a plan is not a fixture.
+
+    the file is the shape `Style.as_dict` prints plus its items. it is not trusted: `styles.gate` is the
+    authority on whether a corpus may train, so a file that claims to be ready and is not gets refused
+    here, with the gate's own reasons.
+    """
+    from . import kohya as kohya_mod, styles as S
+
+    with open(path, encoding="utf-8") as handle:
+        raw = json.load(handle)
+    items = tuple(S.Item(name=str(i.get("name", "")), caption=str(i.get("caption", "")),
+                         subject=str(i.get("subject", "")), technique=str(i.get("technique", "")))
+                  for i in raw.get("items") or ())
+    style = S.Style(id=str(raw.get("id") or "style"), label=str(raw.get("label") or raw.get("id") or "style"),
+                    trigger=str(raw.get("trigger") or ""), base=str(raw.get("base") or "flux-dev"),
+                    items=items, state=str(raw.get("state") or "corpus"),
+                    weight=float(raw.get("weight") or 0.6))
+    reasons = S.gate(style)
+    if reasons:
+        raise kohya_mod.KohyaRefused("; ".join(reasons))
+    return S.advance(style, "gated")
+
+
+def cmd_kohya(args) -> int:
+    from . import kohya as kohya_mod, styles as S
+
+    try:
+        style = _style_from_file(args.style)
+        layout = kohya_mod.Layout(root=args.root, kohya=args.kohya)
+        payload = kohya_mod.run(style, layout, base=args.base)
+    except (kohya_mod.KohyaRefused, S.StyleRefused, OSError) as refusal:
+        print(f"refused: {refusal}", file=sys.stderr)
+        return 1
+    if args.write:
+        os.makedirs(args.write, exist_ok=True)
+        for name, body in payload["writes"].items():
+            with open(os.path.join(args.write, name), "w", encoding="utf-8") as handle:
+                handle.write(body)
+        payload["wrote"] = [os.path.join(args.write, name) for name in payload["writes"]]
+    if args.json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    if args.write:
+        print(f"wrote {len(payload['writes'])} files to {args.write}: {', '.join(sorted(payload['writes']))}")
+    print(f"{payload['style']} ({payload['images']} images, trigger {payload['trigger']})")
+    print(f"  estimate: {payload['estimate_minutes']} min on a free t4, and it resumes from the last epoch")
+    print(f"  gates:    {', '.join(payload['gates'])}")
+    print(f"  runs:     {payload['shell']}")
+    print(f"  after:    {payload['after']}")
+    return 0
+
+
 def cmd_serve(args) -> int:
     """run the bridge: the board a page talks to, and the gpus plugged into it."""
     import signal
@@ -414,6 +467,13 @@ def build_parser() -> argparse.ArgumentParser:
     emit.add_argument("--out")
     emit.set_defaults(func=cmd_emit)
 
+    kohya = subs.add_parser("kohya", help="turn a gated style into the files a free colab trains from")
+    kohya.add_argument("style", help="a style as json: id, trigger, base, items with captions")
+    kohya.add_argument("--write", metavar="DIR", help="write metadata.jsonl, dataset.toml and run.sh here")
+    kohya.add_argument("--root", default="/content/drive/MyDrive/flowby", help="where the colab session keeps things")
+    kohya.add_argument("--kohya", default="/content/sd-scripts", help="where the colab session clones sd-scripts")
+    kohya.add_argument("--base", default="flux.1-dev", help="only flux.1-dev has a proven argv")
+    kohya.set_defaults(func=cmd_kohya)
     serve = subs.add_parser("serve", help="run the bridge a page talks to (loopback only unless told otherwise)")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)

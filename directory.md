@@ -23,6 +23,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
                                 and the dashboard's artifacts tab
     styles.py                   the one trained kind: a corpus gate, a lifecycle, a colab training plan,
                                 and the limits on stacking styles
+    kohya.py                    a gated style's colab run as files: the dataset and its captions, the
+                                toml, and illustrace's t4 command with the reason for each flag
     job.py                      a plan's life, its illegal moves, its artifacts, its watchdog
     hub.py                      the fan-out to every board that is open, with replay
     kits.py                     preset kits: a shelf of styles and subtypes (analog, textile). listed until built
@@ -52,6 +54,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
   docs/
     presets.md                  how a preset is written, and what a good one has to say
     compute.md                  the routing loop, the colab seams, and the failure modes
+    kohya.md                    the crossing from a plan to a run: dataset, config, command, resume
+    style-example.json          a corpus the kohya command accepts, so the seam can be run by hand
     frontend.md                 two canvases, one camera, and why the toggle is cheap
     research.md                 what vectary canvas and fuser already know, and what was taken
   theidea/
@@ -83,4 +87,4 @@ two things are deliberately absent from `src/`. there is no database layer, so a
 a preset added to `presets.py` shows up in the sidebar, the legend, the cli, the plan and the suite without anything else being edited, because every one of those reads the same registry. that is the test of whether a module is in the right place: adding to it should not require touching the layers around it.
 
 a new wire is the one change that is not local, which is why `dtypes.py` is four lines of data and a refusal. if a fifth colour is ever right, it will be because a whole class of asset has nowhere to go, and the argument belongs in `docs/presets.md` before it belongs in code.
-\nplug.py                     plug a gpu: one address that answers like a model server, checked for real
+    plug.py                     plug a gpu: one address that answers like a model server, checked for real
