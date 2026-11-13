@@ -10,6 +10,31 @@ flowby is a creative studio built on a single claim: the spatial layer and the n
 
 the reason to build this rather than another node editor is the order of the two views. most graph tools make you assemble a pipeline before you can see anything, which is a fine way to think and a terrible way to start. the reason to build it rather than another canvas tool is that a canvas with presets and no graph becomes a slot machine: you cannot see what ran, you cannot fix it, and you cannot take it with you. flowby is the wager that both halves are cheap if you are willing to say out loud that a preset **is** a graph.
 
+nothing here is a clone. the pieces were assembled one at a time, each for a reason that is written down
+in [inspiration](#inspiration-and-what-was-taken-from-each) below, and the seam that holds them together is
+the part there was nothing to copy from.
+
+## inspiration, and what was taken from each
+
+flowby sits between five products and is none of them. calling it a clone gets the interesting part
+backwards: a clone copies what a product looks like, and this tree took a piece from one place, a
+refusal from another, and had to invent the joint between them. so each project is listed once, with
+what is genuinely wrong with it, and the last column is the honest one.
+
+a library is a dependency and is listed further down. a product is an idea, and these are the ideas.
+
+| project | what it is, and what is wrong with it | what flowby took |
+| --- | --- | --- |
+| **comfyui** | *too bare.* the graph and nothing else: every job is assembled node by node before anything appears, so the first hour goes on building a pipeline you cannot yet see. | the graph as the real artifact rather than an export format, and ports that carry a declared type, because a value that says what it carries refuses most wrong wires before you finish dragging. left behind: the empty canvas as the front door. |
+| **fuser.studio** | a node canvas with recipes: box-select some nodes, collapse them into a form, and a teammate uses the result without ever meeting the graph. | the task-named front door; **focus mode** and its single action; the **selection pill**, including the price of the selection sitting inside it; and the calm chrome (a zoom readout, unlabelled wires, one accent). left behind: the pale palette, since this is dark only. |
+| **flora.com** | *entirely freeform, cloud only, models behind a subscription.* the typed sentence is a node, and a refinement is the same box typed into again. | the freeform instinct: typing is a node rather than a settings form, and a refinement is a continuation of the same sentence, not a new job. left behind: the cloud floor and the subscription models. this tree plans for a free colab runtime and a gpu you plug in yourself. |
+| **vectary.com/canvas** | *subscription again, and locked in.* presets on a canvas: press a card, get a result, and stay subscribed to keep looking at it. | the preset card as the **fixed** door; one application reaching many frames, which their own page calls design dna matching; and models hidden behind a task name. left behind: the lock-in. a preset here is a subgraph you can open, so pressing it is never a wall. |
+| **base44 studio** *(described, not inspected)* | bring a reference, then carry it across more than one frame. | the third door: a style that follows a board rather than a single frame. recorded as a gap because it is one: there is no session there, so `docs/research.md` keeps it as described rather than looked at. |
+
+what is not in that table is the seam, which is the reason to do the assembly at all: **two views of
+one graph**, a preset that is a subgraph left visible where a person can find it, and a compiler that
+refuses a plan rather than guessing at it. those were not taken from anywhere.
+
 ## the one decision everything else follows from
 
 a preset is not a macro that hides nodes. it is a small graph that gets spawned, wired, and left where an advanced user can find it. what the spatial layer shows is a projection of that graph:
@@ -44,6 +69,34 @@ bin/flowby doctor
 
 the modules are the ideas. `dtypes.py` is the four wires and the refusal to add a fifth. `graph.py` is typed ports, cycles and topological order. `presets.py` is the subgraphs a slider stands in for. `scene.py` is elements on a board, which are nodes with a position, plus the chain and the recipe that chain reads back as. `compile.py` is the plan a shell script can run. `routes.py` is where it runs and what each place cannot do. `job.py` is a plan's life and its illegal moves. `hub.py` is the fan-out to the boards that are open.
 
+## in-house vocabulary
+
+seven kinds are named in `theidea/taxonomy.md` and they form a ladder: style, tool, technique,
+preset, recipe, workflow, factory, each built only from the rungs below it. of those, a **preset** is
+an object (`presets.Preset`) and a **recipe** is the dict `scene.record` returns; a **technique** is
+inlined in each preset for now, and **style**, **workflow** and **factory** are not built.
+
+the words below are the ones actually used in the code and in `bin/flowby`. where a common word is
+deliberately **not** used, the table says so rather than smoothing it over, because two names for one
+thing is how a tool starts lying about what it does.
+
+| word | what it means here | what it is *not* |
+| --- | --- | --- |
+| **preset** | a task card: one input, one job, sliders, sometimes a sweep. pressing it spawns a subgraph and leaves it on the board. | not a macro that hides nodes, and not a saved file. it is generated from what the frame is showing when you press it, which is why it chains instead of overwriting. |
+| **kit** | a shelf that collects the members of one craft: `analog` (cyanotype, linocut stamps, wax seals, block printing, screen print, risograph, lithograph, woodblock, etching) and `textile` (the thread itself, with cross stitch and woven as subtypes under it). it builds nothing and trains nothing. | not a rung on the ladder. a listed member is a name and nothing else, and the menu prints `listed, not built yet` rather than looking pressable. |
+| **style** | trained weights, a trigger and a default strength: a look a preset takes as an input. | not a preset. it has no job of its own, and it is the only kind whose work is training rather than a node. |
+| **technique** | tools in a known order, plus the reason for that order. | not a preset: no input slot, so there is nothing to point it at. |
+| **recipe** | the chain read back. `scene.record` returns a chain with its values and its measured cost, and `scene.replay` applies it to another frame in one call. | not a second thing to store. the chain was always the recipe, which is why nothing new is written when one is recorded. |
+| **template** | a word this tree does **not** use. what other tools call a template is a **preset** here (one input, one job) or a **recipe** (its own inputs and outputs). | not a synonym for either. one word spanning two rungs is exactly the blur this list exists to prevent. |
+| **sweep** | one click that comes back with several variants. the work before the swept node runs once and only the tail is copied, so six relights of one plate is one read and six renders. | not a loop, and not six runs of everything. the compiler treats it as a branch, and the cost line shows the difference. |
+| **slot** | an empty input a preset refuses to compile without: `style-transfer` needs the look it copies, `place-graphic` needs the graphic. | not an error state. it is a preset admitting it cannot fill its own inputs, and the refusal names the slot. |
+| **board preset** | a preset whose tail lands on every frame it is pointed at while its head runs once (`studio-light`), so four frames cost one light read and four grades. | not a separate mechanism. same preset, wider scope, and it breaks apart like any other. |
+| **control** | a slider on a preset. `roughness intensity`, `metalness intensity`, `opacity` and `emission` are four sliders on one node, not four jobs. | not a preset. the brief's 29 bullets became 16 presets and 16 controls, because a menu of twenty-nine model calls is a worse sidebar. |
+| **plug** | a gpu you rent, added with an endpoint and a token. the token goes in and never comes back out. | not connected because it was typed in. it reads `connected` only after a health check answers, and private or metadata addresses are refused. |
+| **route** | where a plan runs, and what that place honestly cannot do: `local`, `colab-browserbase`, `runpod-serverless`, `replicate`. | not a preference. `routes.fit` refuses a plan that will not survive the place it was going, before a browser is opened. |
+| **door** | freeform, fixed, style: the three first moves. | not three products. every door reaches every other, and `tests/selftest.py` performs each crossing. |
+| **factory** | a workflow plus a trigger, a queue, a budget and a reviewer. | not built, and deliberately last: no human in the loop is a cost decision before it is a feature. |
+
 ## the four wires, and the fifth thing that does not get a colour
 
 | wire | colour | carried |
@@ -59,7 +112,7 @@ the other half of the palette is the refusal: **nothing coerces**. an image does
 
 ## three doors into one graph
 
-the three products this sits between each open on a different first move, and that is not three products to flowby:
+the three instincts in the table above each open on a different first move, and none of them is a separate product here:
 
 * **freeform** (fuser's instinct): you type, and the typing is a node. `bin/flowby demo` starts this way, an amber text element wired into a model.
 * **fixed** (vectary's instinct): you press a card, and the card is a subgraph you can open.
@@ -118,7 +171,7 @@ that is the only place the two scopes differ. everything else about a board pres
 
 **the catalogue is named after surfaces and runs models.** this was wrong here for a round, and the correction is the interesting part: crease, stitch, emboss and deboss are **diffusion passes**, not a carved edge. `surface-detail` is therefore a model painting a depth map from a sentence (`flux-depth-lora`) and then a geometry node applying it, and the choice arrives at the model as a prompt fragment rather than as a mode name.
 
-that is the whole trick both products sell: *crease* is a word a designer already has, and behind it sits a model nobody had to choose between. the words are the interface, the models are the product. `presets.PROCEDURAL` is the written list of the four presets that genuinely need no model (shading maths, a camera move, your own code, and extruding a font), so an absence of models is always a claim somebody made rather than something discovered later, and `bin/flowby presets` prints the model next to the name.
+that is the whole trick two of the projects above sell: *crease* is a word a designer already has, and behind it sits a model nobody had to choose between. the words are the interface, the models are the product. `presets.PROCEDURAL` is the written list of the four presets that genuinely need no model (shading maths, a camera move, your own code, and extruding a font), so an absence of models is always a claim somebody made rather than something discovered later, and `bin/flowby presets` prints the model next to the name.
 
 **one preset cannot fill its own inputs, and says so.** `style-transfer` needs a second asset, the look it copies. it spawns with an empty slot, refuses to compile while the slot is empty, and the refusal names the slot. filling it is `scene.link`, which is one drag in the node view.
 
@@ -202,13 +255,16 @@ those numbers are fields on the route, not prose, which is the point: `routes.fi
 | the motion spec, including reduced motion | verified | `node --test web/tests/anim.test.mjs` |
 | dark mode only, with no light theme to drift into | verified | `node --test web/tests/dark.test.mjs` |
 | the spatial canvas being shippable | **licence** | tldraw is source-available, not open source; decision 11 |
-| the react binding | designed | no `node_modules` in this checkout |
+| the web binding: canvas, command bar, kits menu, gpu plug | verified | `npm run build`, 276 tests in `web/tests`, and loaded in chrome against the real graph |
+| the selection pill and its focus view | verified | `web/tests/selection.test.mjs`; pill measured at 313px on desktop and 303px inside a 390px phone, 50px clear of the toolbox |
+| the kits menu showing each style's true state | verified | `web/tests/kitsmenu.test.mjs`, and opened in chrome at both widths |
+| the gpu plug refusing private and metadata addresses | verified | `tests/plug_test.py`, plus the health check that is the only way it becomes connected |
 | fastapi, celery, browserbase | designed | imports guarded, `python3 -m app.main` says so |
 
 the distinction matters more than the count. a tree that says "designed" is one you can debug; a tree that says "done" is one you have to trust.
 
 ## what this tree does not do
 
-it does not watch a video and figure out the choreography. it does not implement a single model call. it does not have a frontend you can load: `web/` holds the alignment maths (tested) and the react binding (not built). it does not persist a board to a database, so the cli works on a demo board it builds in memory.
+it does not watch a video and figure out the choreography. it does not implement a single model call, so every preset is `designed` and no asset has come back from a worker. it does not persist a board to a database, so the cli works on a demo board it builds in memory. two things the page shows are drawn from board state that python does not hear about yet: duplicate and delete in the selection pill, and a placed node from the command bar (picking a row reports that placing it is the bridge, and the bridge is not built). there is no store for a preset made from a selection, which is why that row in the pill's `...` menu is listed and off.
 
 the next three things, in the order they unblock the most: a frame that draws a mesh from a url, so the loop can be closed on someone else's gpu; a `text-to-image` worker that calls a real model, because that is the cheapest one to prove; and a second board, because every board so far has been a fixture.
