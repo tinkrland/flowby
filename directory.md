@@ -64,6 +64,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
   actions/
     halftone.py                 dots, angles and colour modes: a brightness screen, image -> image
     risograph.py                two spot plates off register, and the only-if-two-inks controls
+    hatching.py                 scribble lines that follow the shape, ported from a shader: strips with
+                                per-strip tilt and drift, clipped to the region, round-capped, ink by tone
   tests/selftest.py             the suite: stdlib only, no network, no gpu
   docs/
     presets.md                  how a preset is written, and what a good one has to say
@@ -71,6 +73,8 @@ the rule is the same one the other repos here keep: **a folder with a readme is 
                                 took from it (free utility layer, derived panel) and refused (pasted code)
     recipes.md                  the recipe, read off Fuser's 198: a name for the result, exposed inputs,
                                 and a version a placement pins so finished work cannot change under you
+    hatching.md                 the hatching port: what the shader actually does, what became PIL, and the
+                                one place flowby deliberately differs (ink stays inside the silhouette)
     compute.md                  the routing loop, the colab seams, and the failure modes
     runs.md                     per-node history, and why the reuse key is a run and not a param
     kohya.md                    the crossing from a plan to a run: dataset, config, command, resume

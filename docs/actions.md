@@ -93,7 +93,7 @@ panel a page would draw, with `Second ink` and `Misregistration` marked hidden.
 
 ## the shelf, so far
 
-Two real actions, both runnable today, both written here rather than copied (`actions/`):
+Three real actions, all runnable today (`actions/`):
 
 - **Halftone** (`image → image`): cell size 3..24 px, screen angle 0/15/45/75, ink black/blue/red. Rotate
   the screen off the pixel grid, take each cell's *mean* (a corner sample aliases stripes into dots), grow
@@ -101,9 +101,13 @@ Two real actions, both runnable today, both written here rather than copied (`ac
 - **Risograph** (`image → image`): one or two inks, misregistration 0..12 px, ink coverage 0.2..0.9. The
   second plate and its shift are only offered when `inks` is `two`, which is the `visibleIf` rule doing
   real work in a real file.
+- **Hatching** (`image → image`): the scratchy, hand-drawn line fill, ported from Amagi's "Hatching Effect
+  with VFX-JS" pen (`codepen.io/fand/pen/RNovGmR`) rather than invented: strips at one angle, each with
+  its own tilt, spacing and pivot drift, clipped to the shape, thickened into a round-capped stroke, and
+  optionally inked by darkness. The port and the one deliberate departure are in `docs/hatching.md`.
 
-Both are deterministic, need no model, and cost nothing. `docs/../out/actions-demo/` holds a source /
-halftone / risograph strip made by running them.
+All three are deterministic, need no model, and cost nothing. `out/actions-demo/` holds a source /
+halftone / risograph strip and a four-setting hatching sheet made by running them.
 
 ## what is not built
 
@@ -112,6 +116,8 @@ halftone / risograph strip made by running them.
 - **JavaScript actions.** The contract accepts `runtime: javascript` and refuses any other, but nothing
   executes one; the browser side would be a canvas or WebGL runner in `web/`.
 - **`text` params in the panel.** The parser produces them; the panel draws numbers and choices only.
+- **Any browser-side execution.** Hatching and its reference shader both belong in a canvas or WebGL
+  runner eventually; today it runs in python over a file.
 - **Version pinning.** Fuser's best idea, and the one flowby has no equivalent for: a placed action or
   preset should pin the version it was placed at, so improving it does not silently change old boards.
   That belongs with `runs.py`, which already files a run under the inputs it came from.
