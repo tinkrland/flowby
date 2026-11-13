@@ -635,3 +635,91 @@ here shows: how the selection pill animates in, what the library panel looks lik
 wiring is edited (only that it is), or any keyboard shortcut. the earlier statement that flowby has no
 selection-to-preset, no focus mode and no marquee select still stands, and is now joined by a shape to
 build rather than a name to argue about.
+
+## flora, read from its public site and docs (2026-11-13)
+
+flora (florafauna.ai, now flora.ai) needs a login for the app, but its marketing site and its whole
+documentation (docs.flora.ai, gitbook) are public, and the docs are precise about behaviour. read as
+text, nothing here was watched or used: the app itself was not opened, so every claim below is what the
+docs say a node does, not what the canvas looks like.
+
+**what it is.** an "every model on one infinite canvas" tool: text, image, video, audio, 3D and document
+nodes, 50+ models behind one subscription, plus an MCP server and an API so claude, chatgpt or codex can
+drive a canvas. the page's own numbers: 20M generations, 17M nodes, 5M exports.
+
+**the part that matters here: its nodes do not run on their own.** from *How Nodes Run*:
+
+* running a node does **not** run what is upstream of it. an unready input shows "Can't run yet:
+  waiting for the connected image to be ready". to run a chain you select it and press Run all, which
+  runs in dependency order, up to 50 nodes, and the tooltip shows the node count and total cost first.
+* changing an upstream node never re-runs downstream ones. they keep their last output until run again.
+* **every run adds a generation to the node's history and the old ones are kept** (up to 1,000 per node).
+  a strip of thumbnails sits under the node, and the *active* generation is the one that flows
+  downstream. picking a different one and re-running downstream is how you compare.
+* generating several outputs from one node is a counter (up to 20) with a setting for whether results
+  go into the node's history or onto the canvas as separate copies.
+* a failed run shows an error card with the reason and what to try, credits are refunded automatically,
+  and there is no retry button: you just run it again. free accounts run one generation at a time and
+  the rest show a clock and queue.
+* a connected text node **replaces** the typed prompt rather than adding to it, and the node's own prompt
+  box locks while it is connected. a prompt over the model's character limit disables Generate and says
+  by how much; flora never silently trims it.
+
+**techniques, which is flora's word for flowby's recipe.** *Technique Builder* turns a canvas workflow
+into one reusable node: the canvas locks, you click the starting nodes that become **inputs** and the end
+nodes that become **outputs**, name each (40 character description, optional toggle, up to 100 example
+presets each), the graph is validated (no cycles, everything connected, no batch nodes multiplying out of
+control), and you publish with a name, a 200 character description, an **automatically computed usage
+cost**, a thumbnail, a category and visibility of private, workspace or community. the published thing can
+run as a node or as a standalone app page with no canvas. this is the same idea as fuser's recipe and the
+same shape as `scene.record`, which means three products agree on it independently.
+
+**two other nodes worth knowing.**
+
+* **router**: many sources in, one output, branchable to any number of nodes, and **transparent**: a
+  downstream node resolves through it to the original sources and it adds no cost or step. it exists to
+  stop one reference set being wired into five nodes. flowby's board preset already has the stronger
+  version of this (a head that runs once), but flora's router is only a wiring convenience, not a shared
+  computation.
+* **elements**: a reusable reference built from up to eight images of one subject plus a category (model,
+  character, product, object, material, setting, style, moodboard) and optional guidelines. flora studies
+  the images and generates **one unified reference preview** with a history you can step back through, and
+  you attach it to nodes or mention it in a prompt. this is the nearest thing flora has to a flowby
+  **style**, minus training: it is made by inference, not by weights.
+
+### what flora did that flowby should look at
+
+* **a node keeps its history and the active one flows downstream.** flowby's sweep already produces
+  several variants and `show_variant` picks one, but that is per preset instance and flora's is on every
+  node. it is the cleaner model and the cost is one list per node.
+* **"can't run yet" with the reason.** a refusal that names its cause is the same rule the compiler
+  already follows (`compile` refuses by name before a browser opens), and flora applies it at the button.
+* **never trimming input.** the prompt limit that disables the button instead of cutting is the right
+  default for a tool that charges by the run.
+* **the cost shown before the run, on the group.** flora puts it in the Run all tooltip, fuser in the
+  selection pill, flowby now in the pill too. that is three for three.
+
+### what flora is, set against flowby
+
+flora's claim is breadth: every model, one price. it is subscription, cloud only, and freeform by
+design, which is why its answer to repeatable work is Techniques that people publish rather than a fixed
+catalogue of task cards. flowby's claim is the opposite order: a small set of task-named presets you can
+open, running on a gpu you plug in. neither contradicts the other. the useful borrow is the *run model*
+(explicit, ordered, never silent), not the surface.
+
+## vectary canvas, re-checked (2026-11-13)
+
+nothing on `vectary.com/canvas` has changed the picture in the section above: the page still sells a
+single sentence (one canvas across 2D, 3D and AR, with presets that chain) and the launch video was
+already watched frame by frame. the only new input is the owner's note that the login wall hides the
+product but not the marketing videos, which is how both were read.
+
+## the three clips the owner attached (2026-11-13)
+
+three mp4 files were attached with the note about flora and vectary. two are the same file byte for byte
+(a 3840x2160, 1.77 second h264 clip) and the third is a 480x270 downscale of it. all three show a short
+brand animation for a company called **cardinal**: hand-drawn blob and asterisk shapes in coral, olive
+and orange on cream, the words "build flows" circled twice, a "Good sales takes thinking creatively"
+slide, and a logo lockup. it is not a screen recording of flora or vectary and shows no canvas, node or
+preset, so it contributes nothing to the product findings above. if a different clip was meant, it did
+not come through.
