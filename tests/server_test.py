@@ -80,9 +80,12 @@ class Reading(Base):
     def test_the_kits_are_served_with_every_member_listed_and_none_runnable(self):
         status, body, _ = self.live.call("GET", "/api/kits")
         self.assertEqual(status, 200)
-        self.assertEqual([k["id"] for k in body["kits"]], ["analog", "textile"])
+        self.assertEqual([k["id"] for k in body["kits"]], ["analog", "handdrawn", "textile"])
         members = [m for k in body["kits"] for m in k["members"]]
-        self.assertEqual(len(members), 12)
+        # counted from the declaration rather than pinned, so adding a member to a kit does not fail a
+        # server test for a server reason; a member that goes missing on the wire still fails here
+        from flowby import kits
+        self.assertEqual(len(members), sum(len(kit.members) for kit in kits.KITS.values()))
         self.assertTrue(all(m["state"] == "listed" and m["runnable"] is False for m in members))
 
     def test_an_unknown_route_is_a_404_with_a_sentence(self):

@@ -96,6 +96,11 @@ class Kit:
 #
 # textile: made by thread. "subtypes" is the owner's word: cross stitch and woven are kinds of
 # textile, not looks laid over one, so they are subtype members under a textile style.
+#
+# handdrawn: the owner asked (2026-11-13) for a kit beside analog, "pencil sketch, doodle, scribbled,
+# etc." the line between the two is the mark, not the hand: analog is what a press or a hot tool leaves
+# (carved, screened, burnt), handdrawn is what a tool leaves when a hand drags it across the surface.
+# so pencil and ballpoint belong here and linocut does not, even though a hand cut the lino.
 
 ANALOG = Kit(
     id="analog",
@@ -114,6 +119,22 @@ ANALOG = Kit(
     ),
 )
 
+HANDDRAWN = Kit(
+    id="handdrawn",
+    label="handdrawn",
+    blurb="the look of a line a hand dragged across a surface, wobbly and human",
+    members=(
+        Member("pencil-sketch", "pencil sketch", blurb="graphite on tooth, grey line that lightens where the hand lifted, and a smudge where it rested"),
+        Member("doodle", "doodle", blurb="line with no plan: shapes that fill a margin, looping, going over their own edges"),
+        Member("scribble", "scribbled", blurb="the pencil never lifted, so the marks cross and darken where they pile up"),
+        Member("ballpoint", "ballpoint", blurb="a thin blue-black line with the skip and blob of a cheap pen running dry"),
+        Member("ink-pen", "ink pen", blurb="confident ink line that swells on the downstroke and pools where the nib stopped"),
+        Member("charcoal", "charcoal", blurb="soft black dust, broad strokes, white of the paper coming through the grain"),
+        Member("crayon", "crayon", blurb="waxy pigment that skips the tooth and leaves a broken edge on every stroke"),
+        Member("marker", "marker", blurb="flat felt-tip colour that overlaps into a darker band and bleeds past the line"),
+    ),
+)
+
 TEXTILE = Kit(
     id="textile",
     label="textile",
@@ -127,7 +148,7 @@ TEXTILE = Kit(
     ),
 )
 
-KITS: dict[str, Kit] = {k.id: k for k in (ANALOG, TEXTILE)}
+KITS: dict[str, Kit] = {k.id: k for k in (ANALOG, HANDDRAWN, TEXTILE)}
 
 
 def get(kit_id: str) -> Kit:

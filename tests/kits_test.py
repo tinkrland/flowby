@@ -32,8 +32,20 @@ class TheOwnersLists(unittest.TestCase):
         self.assertEqual((by["woven"].kind, by["woven"].parent), ("subtype", "textile"))
         self.assertIsNone(by["textile"].parent)
 
-    def test_exactly_two_kits_exist_so_nothing_was_added_unasked(self):
-        self.assertEqual(list(kits.KITS), ["analog", "textile"])
+    def test_the_kits_are_the_three_that_were_asked_for(self):
+        # analog and textile on 2026-11-09, handdrawn on 2026-11-13. a fourth would be somebody's idea,
+        # not the owner's, so the list is pinned rather than merely counted.
+        self.assertEqual(list(kits.KITS), ["analog", "handdrawn", "textile"])
+
+    def test_handdrawn_holds_the_marks_named_and_nothing_pressed_or_carved(self):
+        self.assertEqual([m.id for m in kits.HANDDRAWN.members],
+                         ["pencil-sketch", "doodle", "scribble", "ballpoint",
+                          "ink-pen", "charcoal", "crayon", "marker"])
+        # the split from analog is the mark, not the hand: a linocut was cut by hand and belongs to
+        # analog, because the look comes from the block and the press
+        self.assertNotIn("linocut-stamp", [m.id for m in kits.HANDDRAWN.members])
+        self.assertTrue(all(m.kind == "style" for m in kits.HANDDRAWN.members))
+        self.assertTrue(all(m.parent is None for m in kits.HANDDRAWN.members))
 
     def test_analog_members_are_styles_because_the_owner_said_styles(self):
         self.assertTrue(all(m.kind == "style" for m in kits.ANALOG.members))
@@ -134,7 +146,7 @@ class RefusedWhenBuilt(unittest.TestCase):
     def test_asking_for_a_kit_that_does_not_exist_names_the_ones_that_do(self):
         with self.assertRaises(KitRefused) as cm:
             kits.get("pottery")
-        self.assertIn("analog, textile", str(cm.exception))
+        self.assertIn("analog, handdrawn, textile", str(cm.exception))
 
 
 class Shape(unittest.TestCase):
@@ -147,8 +159,10 @@ class Shape(unittest.TestCase):
     def test_the_menu_is_plain_json(self):
         import json
         out = json.loads(json.dumps(kits.menu()))
-        self.assertEqual([k["id"] for k in out["kits"]], ["analog", "textile"])
-        self.assertEqual(out["kits"][1]["total"], 3)
+        self.assertEqual([k["id"] for k in out["kits"]], ["analog", "handdrawn", "textile"])
+        by = {k["id"]: k for k in out["kits"]}
+        self.assertEqual(by["handdrawn"]["total"], len(kits.HANDDRAWN.members))
+        self.assertEqual(by["textile"]["total"], 3)
 
     def test_adding_a_member_is_one_line(self):
         grown = Kit("analog", "analog", "b", kits.ANALOG.members + (Member("mezzotint", "mezzotint", blurb="a rocked plate burnished back from black, velvet darks"),))
