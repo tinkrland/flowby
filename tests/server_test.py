@@ -583,5 +583,45 @@ class Content(unittest.TestCase):
         self.assertEqual(srv.content_type(b""), "application/octet-stream")
 
 
+class TheRecipeCards(unittest.TestCase):
+    """`GET /api/recipes`: the board's own chains, drawn as the card a stranger reads.
+
+    the route exists so the page cannot describe a board differently from the terminal: both call
+    `recipes.card`, and both take the recipe from `Session.record`, not from a second copy of the steps.
+    """
+
+    def setUp(self):
+        self.live = Live()
+        png = PNG
+        added = self.live.call("POST", "/api/assets", raw=png)
+        self.digest = added[1]["digest"]
+        self.element = self.live.call("POST", "/api/add_file",
+                                      {"kind": "image", "label": "heron",
+                                       "digest": self.digest})[1]["receipt"]["ids"][0]
+        self.live.call("POST", "/api/apply", {"element": self.element, "preset": "sketch-to-render"})
+
+    def tearDown(self):
+        self.live.close()
+
+    def test_a_chain_on_the_board_comes_back_as_a_card(self):
+        status, body, _ = self.live.call("GET", "/api/recipes")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(body["recipes"]), 1)
+        card = body["recipes"][0]
+        self.assertEqual(card["element"], self.element)
+        for key in ("name", "brief", "version", "inputs", "advanced", "hidden", "needs", "run"):
+            self.assertIn(key, card)
+
+    def test_the_card_names_the_step_that_cannot_be_changed_rather_than_hiding_it(self):
+        card = self.live.call("GET", "/api/recipes")[1]["recipes"][0]
+        self.assertTrue(card["hidden"], "a chain sets settings the card has no control for; they must be named")
+        self.assertTrue(all("no control" in row["means"] for row in card["hidden"]))
+
+    def test_an_element_with_nothing_applied_has_no_card(self):
+        self.live.call("POST", "/api/add_text", {"text": "a heron on a jetty", "label": "caption"})
+        names = [card["name"] for card in self.live.call("GET", "/api/recipes")[1]["recipes"]]
+        self.assertNotIn("caption", names)
+
+
 if __name__ == "__main__":
     unittest.main()

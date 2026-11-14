@@ -15,6 +15,7 @@ the surface, all of it:
     GET  /api/presets            the menu the command bar reads
     GET  /api/kits               the preset kits, each member with its true state and whether a look words it
     GET  /api/looks              the look catalogue: one group per slot, with each look's families and refuses
+    GET  /api/recipes            the board's chains as cards a stranger can read before pressing run
     GET  /api/plugs              the gpus plugged in, never with a token
     POST /api/plugs/add          {label, provider, endpoint, token?, tunnel?}   a token goes in and never comes out
     POST /api/plugs/check        {id}   really asks the server, the only way a plug becomes up
@@ -80,6 +81,24 @@ def menu() -> dict:
     """the preset menu, exactly as `flowby --json presets` prints it. one function builds it, so the
     file the page loads at build time and the route it asks at run time cannot disagree."""
     return presetmod.legend()
+
+
+def recipes_on_board(session) -> list[dict]:
+    """every element with a chain, as a card. the same recipe `flowby recipe --card` draws, from the
+    same function, so the page and the terminal cannot describe one board two ways."""
+    from . import recipes as recipemod
+
+    out = []
+    for element_id, element in session.scene.elements.items():
+        record = session.scene.record(element_id)
+        if not record["steps"]:
+            continue
+        made = recipemod.of(record, inputs=recipemod.default_inputs(record), author="the board",
+                            category=record["kind"],
+                            brief=f"{element.label}: bring your own {record['kind']} and get "
+                                  f"{presetmod.get(record['steps'][-1]['preset']).out_dtype()} back")
+        out.append({"element": element_id, **recipemod.card(made)})
+    return out
 
 
 def make_server(session: Session, host: str = "127.0.0.1", port: int = 0,
@@ -194,6 +213,8 @@ def make_server(session: Session, host: str = "127.0.0.1", port: int = 0,
                 except looksmod.LookRefused as problem:
                     return self._json(200, {**kitmod.menu(presets=presetmod.PRESETS), "looks": str(problem)})
                 return self._json(200, kitmod.menu(presets=presetmod.PRESETS, looks=shelf))
+            if path == "/api/recipes":
+                return self._json(200, {"recipes": recipes_on_board(session)})
             if path == "/api/looks":
                 try:
                     return self._json(200, looksmod.shelf(session.looks))

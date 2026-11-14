@@ -571,6 +571,30 @@ def cmd_recipe(args) -> int:
         if made is None:
             print(f"{scene.elements[args.element].label}: nothing applied yet")
             return 0
+        if args.card:
+            drawn = recipes.card(made)
+            if args.json:
+                print(json.dumps(drawn, indent=2))
+                return 0
+            print(f"{drawn['name']} v{drawn['version']}  {drawn['brief']}")
+            for item in drawn["inputs"]:
+                mark = "*" if item["required"] else " "
+                example = item["example"]["value"] if item["example"] else "nothing saved"
+                print(f"  {mark} {item['label']}: saved at {example!r}")
+            for slot in drawn["slots"]:
+                print(f"  {'*' if slot['required'] else ' '} {slot['slot']} slot on {slot['preset']}"
+                      f"{'' if slot['filled'] else ': nothing in it'}")
+            for row in drawn["advanced"]:
+                print(f"  advanced {row['name']}={row['value']!r} ({row['means']})")
+            for row in drawn["hidden"]:
+                print(f"  fixed    {row['preset']}.{row['name']}: {row['means']}")
+            needs = drawn["needs"]
+            print(f"  needs    {needs['runtime']}{', a gpu' if needs['gpu'] else ''}, "
+                  f"weights: {', '.join(needs['weights']) or 'none'}, "
+                  f"{'costs' if needs['paid'] else 'free'}")
+            run = drawn["run"]
+            print(f"  [{run['label']}]" + ("" if run["enabled"] else f"  blocked by {', '.join(run['blocked_by'])}"))
+            return 0
         if args.json:
             print(json.dumps(made.panel(), indent=2))
             return 0
@@ -757,6 +781,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     recipe = subs.add_parser("recipe", help="the chain on a board, read back as a recipe")
     recipe.add_argument("element", nargs="?")
+    # the card is what a stranger reads before pressing run: required marks, an Advanced fold
+    # holding only the seed, and what the recipe needs. the panel is what its author reads.
+    recipe.add_argument("--card", action="store_true", help="the card a stranger reads, not the panel")
     recipe.set_defaults(func=cmd_recipe)
 
     fit = subs.add_parser("fit", help="which routes would take a preset's plan")

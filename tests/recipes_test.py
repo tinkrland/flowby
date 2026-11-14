@@ -214,6 +214,89 @@ class ThePanel(unittest.TestCase):
         self.assertEqual(self.panel["models"], sorted(set(self.panel["models"])))
 
 
+class TheCard(unittest.TestCase):
+    """what a stranger reads before pressing run: required marks, an Advanced fold, and what it needs.
+
+    the shape is comfy.org/hub/workflows, read for docs/recipes.md: a saved example beside each input, a
+    required mark that is not decoration, an Advanced fold holding only the seed, and a "what you need"
+    block before the button. the rule this class exists to hold is the last one: anything the chain sets
+    that the card cannot show is *named*, not folded in and forgotten.
+    """
+
+    def setUp(self):
+        self.made = recipes.of(
+            record(steps=[{"preset": "sketch-to-render",
+                           "values": {"fidelity": 6.0, "keep": 0.5, "material": "ceramic", "seed": 41},
+                           "slots": {}}]),
+            inputs=[exposure(label="how closely", preset="sketch-to-render", param="fidelity", start=6.0)],
+            brief="transform a sketch into a painted still", author="liat")
+        self.card = recipes.card(self.made)
+
+    def test_an_input_with_a_saved_value_carries_the_example_and_is_not_required(self):
+        got = self.card["inputs"][0]
+        self.assertFalse(got["required"])
+        self.assertEqual(got["example"], {"kind": "value", "value": 6.0})
+
+    def test_a_control_is_never_required_because_it_always_has_a_saved_example(self):
+        # `of` refuses an exposed control with no start value, so a required mark on one would be a lie
+        self.assertFalse(self.card["inputs"][0]["required"])
+        self.assertTrue(all(not i["required"] for i in self.card["inputs"]))
+        self.assertTrue(self.card["run"]["enabled"], "nothing to supply, so nothing blocks the run")
+
+    def test_an_empty_slot_is_required_and_names_itself_as_the_blocker(self):
+        made = recipes.of(record(steps=[{"preset": "style-transfer", "values": {}, "slots": {"look": ""}}]),
+                          inputs=[])
+        card = recipes.card(made)
+        self.assertTrue(card["slots"][0]["required"])
+        self.assertFalse(card["run"]["enabled"])
+        self.assertEqual(card["run"]["blocked_by"], ["the look slot on style-transfer"])
+
+    def test_the_advanced_fold_holds_the_seed_and_nothing_else(self):
+        self.assertEqual([a["name"] for a in self.card["advanced"]], ["seed"])
+
+    def test_a_setting_the_card_cannot_show_is_named_rather_than_hidden(self):
+        hidden = {h["name"]: h["value"] for h in self.card["hidden"]}
+        self.assertEqual(hidden, {"keep": 0.5, "material": "ceramic"})
+        self.assertIn("no control", self.card["hidden"][0]["means"])
+
+    def test_an_exposed_setting_is_not_also_reported_as_hidden(self):
+        names = [h["name"] for h in self.card["hidden"]] + [a["name"] for a in self.card["advanced"]]
+        self.assertNotIn("fidelity", names)
+
+    def test_what_it_needs_names_the_runtime_the_weights_and_whether_it_costs(self):
+        needs = self.card["needs"]
+        self.assertEqual(needs["runtime"], "the machine you are on")
+        self.assertEqual(needs["weights"], ["controlnet-scribble", "sdxl-turbo"])
+        self.assertTrue(needs["paid"], "a card naming weights must not claim to be free")
+
+    def test_an_empty_slot_becomes_a_file_it_needs(self):
+        made = recipes.of(record(steps=[{"preset": "style-transfer",
+                                         "values": {}, "slots": {"look": ""}}]), inputs=[])
+        card = recipes.card(made)
+        self.assertEqual(card["slots"], [{"preset": "style-transfer", "slot": "look", "filled": False,
+                                          "required": True}])
+        self.assertEqual(card["needs"]["files"], ["something for the look slot on style-transfer"])
+
+    def test_a_filled_slot_is_not_something_it_needs(self):
+        made = recipes.of(record(steps=[{"preset": "style-transfer",
+                                         "values": {}, "slots": {"look": "look.crayon"}}]), inputs=[])
+        self.assertEqual(recipes.card(made)["needs"]["files"], [])
+
+    def test_a_recipe_with_no_steps_is_refused_rather_than_drawn_empty(self):
+        # `of` refuses first, so the card is handed a hand-built recipe to prove its own guard is live
+        # rather than shadowed by the constructor's
+        with self.assertRaises(recipes.RecipeRefused):
+            recipes.card(recipes.Recipe(name="nothing", brief="", steps=()))
+
+    def test_the_panel_and_the_card_agree_about_the_version(self):
+        self.assertEqual(self.card["version"], self.made.version)
+        self.assertEqual(self.card["version"], recipes.of(record(steps=[{"preset": "sketch-to-render",
+                        "values": {"fidelity": 6.0, "keep": 0.5, "material": "ceramic", "seed": 41},
+                        "slots": {}}], name="renamed"),
+                        inputs=[exposure(label="how closely", preset="sketch-to-render",
+                                          param="fidelity", start=6.0)]).version)
+
+
 class TheShelf(unittest.TestCase):
     def setUp(self):
         self.one = recipes.of(record(name="one"), category="image")

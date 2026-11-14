@@ -284,3 +284,85 @@ def facets(recipes: list[Recipe]) -> dict:
 
 def _ordered(mapping: dict) -> dict:
     return {key: mapping[key] for key in sorted(mapping)}
+
+
+# -- the card a stranger reads before pressing run ------------------------------------------------------
+#
+# comfy.org/hub/workflows was read for this shape (see docs/recipes.md): every input carries a required
+# mark and a saved example, the settings split into the two that matter and an *Advanced* fold, and a
+# "what you need" block sits before the run button rather than after it. those three are the difference
+# between a page somebody can use and a page somebody has to ask about.
+#
+# the advanced fold holds **only the seed**. that is not modesty: a seed is the one setting whose meaning
+# everyone already knows, and a recipe that hides its guidance behind "advanced" has not said what it
+# does. anything else the chain sets is not quietly folded in, it is reported as `hidden` so the author
+# can see that nobody can change it.
+
+ADVANCED = ("seed",)
+
+
+def card(recipe: "Recipe", *, route=None, presets_by_name: dict | None = None) -> dict:
+    """everything the recipe's own page needs, in one pass, with the claims it can and cannot make."""
+    if not recipe.steps:
+        raise RecipeRefused(f"{recipe.name!r} has no steps, so there is nothing to run")
+
+    if route is None:
+        from . import routes as routemod
+        route = routemod.ROUTES["local"]
+
+    # a required mark has to mean something. `recipes.of` refuses to expose a control without a starting
+    # value (the range check needs one), so in this tree every control on a card HAS a saved example and
+    # nothing is required of the person reading it. the one thing that can be missing is a slot with no
+    # wiring, which is why the mark lives there and the card says so rather than decorating a control.
+    inputs = [{
+        "label": exposed.label,
+        "means": exposed.means,
+        "required": False,
+        "example": {"kind": "value", "value": exposed.start},
+        "target": {"preset": exposed.preset, "param": exposed.param},
+    } for exposed in recipe.inputs]
+
+    exposed_targets = {e.target() for e in recipe.inputs}
+    advanced: list[dict] = []
+    hidden: list[dict] = []
+    for step in recipe.steps:
+        for name, value in sorted((step.get("values") or {}).items()):
+            if (step["preset"], name) in exposed_targets:
+                continue
+            entry = {"preset": step["preset"], "name": name, "value": value}
+            if name in ADVANCED:
+                advanced.append({**entry, "means": "the same picture from a different roll of the dice"})
+            else:
+                hidden.append({**entry, "means": f"runs at {value!r}; the card has no control for it"})
+
+    slots = [{"preset": step["preset"], "slot": slot, "filled": bool(target), "required": not target}
+             for step in recipe.steps for slot, target in sorted((step.get("slots") or {}).items())]
+    empty_slots = [s for s in slots if s["required"]]
+
+    # the recipe already knows its models; reading `requires` off the record would find nothing, because
+    # a recorded chain stores values and wiring, not a preset's declared requirements
+    models = sorted(recipe.models)
+    needs = {
+        "runtime": route.label,
+        "gpu": bool(route.gpu),
+        "cost": route.cost,
+        "weights": models,
+        "files": [f"something for the {s['slot']} slot on {s['preset']}" for s in empty_slots],
+        "paid": bool(models) or bool(route.gpu),
+    }
+
+    blocked = [f"the {s['slot']} slot on {s['preset']}" for s in empty_slots]
+    return {
+        "name": recipe.name,
+        "brief": recipe.brief,
+        "version": recipe.version,
+        "author": recipe.author,
+        "output": recipe.output or recipe.dtype,
+        "category": recipe.category,
+        "inputs": inputs,
+        "advanced": advanced,
+        "hidden": hidden,
+        "slots": slots,
+        "needs": needs,
+        "run": {"label": "run", "enabled": not blocked, "blocked_by": blocked},
+    }
