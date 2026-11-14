@@ -94,12 +94,37 @@ a refusal cannot quietly become a different refusal:
 | `marker --mode video` | marker does not run in video; it runs in image, image_edit |
 | two looks setting `guidance` differently | guidance is set to 3.0 by look.a and to 8.0 by look.b |
 
+## a look on the board
+
+`looks.place(scene, ident, preset=, mode=)` puts a look where it can be used: it compiles the look for
+the model the preset actually names, then adds a **text node holding the direction** and applies the
+preset that reads text. The direction goes into the text node rather than a hidden prompt field because
+that node is the thing a person edits afterwards, and adding their subject to it is the same gesture as
+typing.
+
+Three answers worth knowing:
+
+- **the settings become sliders.** A compiled look speaks in node params (`steps`, `guidance`); a panel
+  speaks in slider names (`detail`, `fidelity`). `settings_as_sliders` reads the mapping off the preset's
+  own sliders, so it cannot invent a control the panel does not draw. A setting with no slider is dropped
+  **out loud**, named in `warnings`, rather than silently.
+- **an unknown model is not a failure.** `model_for` returns `""` when no step names a model this tree
+  knows; the look then compiles with its required default fragment and says so in `warnings`. Guessing a
+  family would tune words for a model nothing runs.
+- **placing is not running.** Nothing is generated. The board gets a text node and a preset's nodes, and
+  `docs/looks.md` says that in the same breath as the button's label, which is `place`, not `run`.
+
+Reachable three ways: `bin/flowby place look.crayon --preset text-to-image`, `POST /api/looks/place`
+`{look, preset?, mode?}` returning the whole board, and the kits menu, where only a `worded` member has a
+button at all.
+
 ## what is not built
 
-- **No panel yet.** `looks.shelf()` groups the catalogue by slot with each look's families, settings and
-  conflicts, which is exactly what a picker draws, but the web board does not draw it. The kit menu shows
-  `worded` per member; pressing one does nothing.
-- **No placements.** A compiled look is not attached to a board element, so nothing yet runs from a look.
+- **No picker.** `looks.shelf()` groups the catalogue by slot with each look's families, settings and
+  conflicts, which is exactly what a picker draws, and `GET /api/looks` serves it, but the board has no
+  slot-by-slot panel for it yet: placing is reached from the kits menu, not from a look's own page.
+- **No pin.** A placed look records its preset and values, but a board placement does not hold a recipe
+  version, so improving a look can still change a board that used it.
 - **`medium` is empty.** No analog look exists; the analog kit's nine members are still `listed`.
 - **Two families.** `flux` (dev, schnell) and `sdxl` (turbo) are the families flowby's presets actually
   run on. A third model means a third fragment per look, which is the cost of the design and the reason

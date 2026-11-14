@@ -71,3 +71,47 @@ test("an unreachable server is its own state, not an empty kit list", () => {
   assert.equal(b.tone, "off");
   assert.match(b.title, /not running/);
 });
+
+test("a member with words but no weights says so, and is placeable rather than usable", () => {
+  const v = k.kitView(kit([
+    m("pencil-sketch", { state: "listed", look: "look.pencil-sketch", worded: true }),
+    m("cyanotype", { state: "listed" }),
+  ]));
+  const [sketch, cyan] = v.rows;
+  assert.equal(sketch.word, "worded, not trained");
+  assert.equal(sketch.placeable, true);
+  assert.equal(sketch.usable, false);          // placing is not running: no model runs yet
+  assert.equal(sketch.look, "look.pencil-sketch");
+  assert.equal(cyan.placeable, false);
+  assert.equal(cyan.word, k.STATE_WORD.listed);
+});
+
+test("a worded flag with no look behind it is not placeable", () => {
+  // the two fields come from python; believing one without the other would put a button on nothing
+  const v = k.kitView(kit([m("a", { worded: true }), m("b", { look: "look.b" })]));
+  assert.deepEqual(v.rows.map((r) => r.placeable), [false, false]);
+  assert.equal(v.worded, 0);
+});
+
+test("the summary counts worded members beside ready ones, and says nothing when there are none", () => {
+  const mixed = k.kitView(kit([m("a", { worded: true, look: "look.a" }), m("b")]));
+  assert.equal(mixed.summary, "0 of 2 ready, 1 worded");
+  assert.equal(k.kitView(kit([m("b")])).summary, "0 of 1 ready");
+});
+
+test("a training member keeps its training word even when it has wording", () => {
+  // "worded" must not hide that a corpus is being gathered; the stronger fact wins
+  const v = k.kitView(kit([m("a", { state: "corpus", look: "look.a", worded: true })]));
+  assert.equal(v.rows[0].word, k.STATE_WORD.corpus);
+});
+
+test("the header button offers placing when nothing is trained but something is worded", () => {
+  const b = k.kitsButton([kit([m("a", { worded: true, look: "look.a" }), m("b")])]);
+  assert.match(b.title, /1 of 2 have wording and can be placed/);
+  assert.notEqual(b.tone, "up");               // green is for a run, and nothing here can run
+});
+
+test("an unknown state with wording still reads as worded rather than as a made-up state", () => {
+  assert.equal(k.wordFor("invented", { worded: true }), "worded, not trained");
+  assert.equal(k.wordFor("invented"), k.STATE_WORD.listed);
+});

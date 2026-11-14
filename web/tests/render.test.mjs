@@ -77,3 +77,59 @@ test("an id that is not on the board draws nothing rather than an empty shell", 
   const html = await panelOf("nowhere");
   assert.equal(html, "<em>no panel</em>");
 });
+
+// --- the kits menu, drawn ---------------------------------------------------------------------------
+// the words are checked in kitsmenu.test.mjs; this checks that the page agrees with them. the failure
+// it exists for is a listed style that looks pressable, which would offer a run that cannot happen.
+
+const kitsBundle = build({
+  entryPoints: [path.join(here, "kits-entry.tsx")],
+  bundle: true, format: "esm", platform: "node", outfile: out.replace("panel-", "kits-"), jsx: "automatic",
+  external: ["react", "react-dom", "react-dom/server"], logLevel: "error",
+}).then(() => import(`file://${out.replace("panel-", "kits-")}`));
+
+const kit = {
+  id: "analog", label: "analog", blurb: "the look of something made by hand",
+  members: [
+    { id: "cyanotype", label: "cyanotype", blurb: "prussian blue sun prints", parent: null, state: "listed", runnable: false },
+    { id: "crayon", label: "crayon", blurb: "waxy pigment that skips the tooth", parent: null, state: "listed", runnable: false, look: "look.crayon", worded: true },
+    { id: "ghost", label: "ghost", blurb: "worded but no such look", parent: null, state: "listed", runnable: false, look: "look.ghost", worded: false },
+  ],
+};
+
+test("a worded member is drawn with one place button, and a listed one with none", async () => {
+  const { RenderKit } = await kitsBundle;
+  const html = renderToStaticMarkup(React.createElement(RenderKit, { kit }));
+  const buttons = html.match(/<button/g) ?? [];
+  assert.equal(buttons.length, 1, "exactly one member can be placed, so exactly one button");
+  assert.match(html, /put crayon on the board/);
+  assert.doesNotMatch(html, /put cyanotype on the board/, "a style with no wording must not offer a button");
+});
+
+test("the word beside a member is its true state, and a worded one says what it lacks", async () => {
+  const { RenderKit } = await kitsBundle;
+  const html = renderToStaticMarkup(React.createElement(RenderKit, { kit }));
+  assert.match(html, /worded, not trained/);
+  assert.match(html, /listed, not built yet/);
+});
+
+test("a member whose look python did not confirm is not placeable, even if it claims one", async () => {
+  const { RenderKit } = await kitsBundle;
+  const html = renderToStaticMarkup(React.createElement(RenderKit, { kit }));
+  assert.doesNotMatch(html, /put ghost on the board/);
+});
+
+test("a row that is being placed says so and goes quiet", async () => {
+  const { RenderKit } = await kitsBundle;
+  const html = renderToStaticMarkup(React.createElement(RenderKit, { kit, placing: "look.crayon" }));
+  assert.match(html, /placing…/);
+  assert.match(html, /disabled/);
+});
+
+test("the header button never claims more than the kits hold", async () => {
+  const { KitButton } = await kitsBundle;
+  const html = renderToStaticMarkup(React.createElement(KitButton, { kits: [kit] }));
+  assert.match(html, /nothing trained yet; 1 of 3 have wording and can be placed/);
+  const off = renderToStaticMarkup(React.createElement(KitButton, { kits: [kit], reachable: false }));
+  assert.match(off, /server is not running/);
+});

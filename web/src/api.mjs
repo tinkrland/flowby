@@ -65,5 +65,9 @@ export function client({ base = "", fetcher = globalThis.fetch } = {}) {
     checkPlug: (id) => call("POST", "/api/plugs/check", { id }),
     removePlug: (id) => call("POST", "/api/plugs/remove", { id }),
     kits: () => call("GET", "/api/kits"),
+    looks: () => call("GET", "/api/looks"),
+    // a look becomes a text node plus the preset that reads it. the answer is the whole board back, so
+    // the caller does not have to guess what changed
+    placeLook: (look, extra = {}) => call("POST", "/api/looks/place", { look, ...extra }),
   };
 }

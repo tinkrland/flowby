@@ -401,3 +401,76 @@ def shelf(looks: dict[str, Look]) -> dict:
     return {"max_stack": MAX_STACK, "slots": [slot for slot in SLOTS],
             "families": {family: list(models) for family, models in FAMILIES.items()},
             "groups": groups, "total": len(looks)}
+
+
+# --- a look, on the board ----------------------------------------------------------------------------
+
+def default_catalogue() -> dict[str, Look]:
+    """the catalogue beside this package, found by walking up rather than by trusting the caller's cwd."""
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "looks").is_dir():
+            return catalogue(parent / "looks")
+    raise LookRefused("there is no looks folder beside this module, so there are no looks to offer")
+
+
+def model_for(preset) -> str:
+    """the model the chain behind a preset actually names, so the wording is worded for that model.
+
+    an empty string means no step names a model anybody here knows, which is not a failure: it compiles
+    with the default fragment and says so. guessing a family would put words tuned for a model nothing
+    runs onto the board.
+    """
+    for step in preset.steps.values():
+        for model in (step.requires or {}).get("models") or ():
+            if family_of(model):
+                return model
+    return ""
+
+
+def settings_as_sliders(params: dict, preset) -> tuple[dict, list[str]]:
+    """turn compiler settings into the slider names the preset's own panel shows.
+
+    a compiled look speaks in node params (`steps`, `guidance`); a panel speaks in slider names
+    (`detail`, `fidelity`). the sliders are read off the preset, so this cannot invent a control that
+    the panel does not draw, and a setting with no slider is dropped out loud rather than silently.
+    """
+    by_param: dict[str, str] = {}
+    for slider in preset.sliders.values():
+        for target in slider.targets:
+            by_param.setdefault(target.param, slider.name)
+    values: dict[str, object] = {}
+    unsaid: list[str] = []
+    for key, value in params.items():
+        name = by_param.get(key)
+        if name is None:
+            unsaid.append(f"{key} has no slider on {preset.label}, so the look's {value!r} was left off")
+        else:
+            values[name] = value
+    return values, unsaid
+
+
+def place(scene, ident: str, *, preset: str = "text-to-image", mode: str = "image",
+          shelf: dict[str, Look] | None = None) -> dict:
+    """put a look on a board: a text node holding the direction, then the preset that reads text.
+
+    the direction goes into the text node rather than into a hidden prompt field, because that node is
+    what the person edits afterwards: adding their subject to it is the same gesture as typing. the
+    preset's own `write` step composes it with whatever the board already feeds in.
+    """
+    from . import presets as presetmod
+
+    held = shelf or default_catalogue()
+    look = held.get(ident)
+    if look is None:
+        raise LookRefused(f"{ident!r} is not a look here")
+    chain = presetmod.get(preset)
+    model = model_for(chain)
+    compiled = compile_looks((ident,), model=model, mode=mode, prompt="", looks=held)
+    values, unsaid = settings_as_sliders(compiled.params, chain)
+    element = scene.add("text", look.name, text=compiled.prompt)
+    before = set(scene.graph.nodes)
+    scene.apply(element.id, preset, values)
+    made = sorted(set(scene.graph.nodes) - before)
+    return {"look": look.id, "name": look.name, "element": element.id, "nodes": made,
+            "preset": preset, "model": model, "values": values,
+            "warnings": list(compiled.warnings) + unsaid}

@@ -24,6 +24,7 @@ from dataclasses import dataclass
 
 from . import presets as presetmod
 from . import runs
+from .looks import LookRefused
 from .presets import PresetRefused
 from .scene import KIND_DTYPE, Scene, SceneRefused
 from .store import Store, StoreRefused
@@ -52,7 +53,8 @@ class Receipt:
 
 
 class Session:
-    def __init__(self, store: Store, scene: Scene | None = None, title: str = "untitled"):
+    def __init__(self, store: Store, scene: Scene | None = None, title: str = "untitled",
+                 looks: dict | None = None):
         self.store = store
         self.scene = scene or Scene(id="board", title=title)
         self._undo: list[Scene] = []
@@ -62,6 +64,9 @@ class Session:
         # per-node history. it sits beside the scene rather than inside it: undo reverts the board,
         # and a run that happened still happened.
         self.runs = runs.Book()
+        # the look catalogue is read once and shared: it is a folder of json rows, and re-reading it on
+        # every place would let the catalogue change under a board that already used one of its looks
+        self._looks = looks
 
     # -- the one way anything changes ----------------------------------------------------------
 
@@ -71,7 +76,7 @@ class Session:
             trial = copy.deepcopy(self.scene)
             try:
                 receipt = fn(trial)
-            except (SceneRefused, PresetRefused, StoreRefused, SessionRefused, KeyError) as problem:
+            except (SceneRefused, PresetRefused, StoreRefused, SessionRefused, LookRefused, KeyError) as problem:
                 raise SessionRefused(self._words(problem)) from problem
             self._undo.append(self.scene)
             del self._undo[:-UNDO_DEPTH]
@@ -86,6 +91,13 @@ class Session:
         if isinstance(problem, KeyError):
             return f"{problem.args[0]!r} is not something this board knows"
         return str(problem)
+
+    @property
+    def looks(self) -> dict:
+        if self._looks is None:
+            from . import looks as looksmod
+            self._looks = looksmod.default_catalogue()
+        return self._looks
 
     # -- actions --------------------------------------------------------------------------------
 
@@ -118,6 +130,21 @@ class Session:
             label = presetmod.get(preset).label
             return Receipt("apply_preset", f"{label} on {scene.elements[element_id].label}", made or [element_id])
         return self._do("apply_preset", run)
+
+    def place_look(self, look_id: str, preset: str = "text-to-image", mode: str = "image") -> dict:
+        """put a look on the board as a text node plus the preset that reads it.
+
+        the direction is the node's text, so the person's next move is editing that node, not hunting a
+        prompt field. a look that cannot compile changes nothing, like every other action here.
+        """
+        from . import looks as looksmod
+
+        def run(scene: Scene) -> Receipt:
+            placed = looksmod.place(scene, look_id, preset=preset, mode=mode, shelf=self.looks)
+            return Receipt("place_look",
+                           f"{placed['name']} on the board, with {len(placed['nodes'])} nodes behind it",
+                           [placed["element"], *placed["nodes"]])
+        return self._do("place_look", run)
 
     def remove(self, element_id: str) -> dict:
         def run(scene: Scene) -> Receipt:

@@ -11,5 +11,7 @@ export interface Client {
   checkPlug(id: string): Promise<{ plug: PlugView; plugs: PlugView[] }>;
   removePlug(id: string): Promise<{ plugs: PlugView[] }>;
   kits(): Promise<any>;
+  looks(): Promise<any>;
+  placeLook(look: string, extra?: { preset?: string; mode?: string }): Promise<any>;
 }
 export function client(options?: { base?: string; fetcher?: typeof fetch }): Client;

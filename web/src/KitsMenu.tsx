@@ -9,11 +9,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Unreachable, baseUrl, client } from "./api.mjs";
 import { kitView, kitsButton } from "./kitsmenu.mjs";
 import type { KitData } from "./kitsmenu.mjs";
+import { KitRowView } from "./KitRow";
 
 const N = { bg: "#121214", line: "#26262a", text: "#e4e4e7", mute: "#71717a", dim: "#a1a1aa", accent: "#a78bfa" };
 const TONE: Record<string, string> = { up: "#4ade80", idle: "#a1a1aa", off: "#52525b" };
 
-export function KitsMenu({ embedded = false }: { embedded?: boolean } = {}) {
+export function KitsMenu({ embedded = false, onPlaced }: { embedded?: boolean; onPlaced?: (answer: any) => void } = {}) {
   const api = useMemo(() => client({ base: baseUrl((import.meta as any).env ?? {}) }), []);
   // embedded means the rail owns the open state: the panel is the slot's content, not a popover
   const [open, setOpen] = useState(embedded);
@@ -39,6 +40,19 @@ export function KitsMenu({ embedded = false }: { embedded?: boolean } = {}) {
     window.addEventListener("keydown", esc);
     return () => { window.removeEventListener("mousedown", away); window.removeEventListener("keydown", esc); };
   }, [open]);
+
+  // placing is the one action a worded member offers. it is not a run: python puts a text node and the
+  // preset that reads it on the board, and nothing is generated until a model is plugged in.
+  const [placing, setPlacing] = useState<string | null>(null);
+  const place = useCallback(async (look: string) => {
+    setPlacing(look);
+    try {
+      const answer = await api.placeLook(look);
+      onPlaced?.(answer);
+    } catch (e) {
+      onPlaced?.({ refused: e instanceof Error ? e.message : String(e) });
+    } finally { setPlacing(null); }
+  }, [api, onPlaced]);
 
   const button = kitsButton(kits, { reachable });
   const views = (kits ?? []).map(kitView);
@@ -80,15 +94,7 @@ export function KitsMenu({ embedded = false }: { embedded?: boolean } = {}) {
               </div>
               <div style={{ color: N.mute, marginTop: 2, lineHeight: 1.4 }}>{v.blurb}</div>
               <ul style={{ listStyle: "none", margin: "8px 0 0", padding: 0, display: "grid", gap: 6 }}>
-                {v.rows.map((r) => (
-                  <li key={r.id} style={{ marginLeft: r.depth * 16, padding: "7px 9px", border: `1px solid ${N.line}`, borderRadius: 8, opacity: r.usable ? 1 : 0.72 }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                      <span style={{ color: r.usable ? N.text : N.dim }}>{r.label}</span>
-                      <span style={{ marginLeft: "auto", color: r.usable ? "#4ade80" : N.mute, fontSize: 11.5 }}>{r.word}</span>
-                    </div>
-                    <div style={{ color: N.mute, marginTop: 2, lineHeight: 1.4, fontSize: 11.5 }}>{r.blurb}</div>
-                  </li>
-                ))}
+                {v.rows.map((r) => <KitRowView key={r.id} r={r} placing={placing} onPlace={place} />)}
               </ul>
             </section>
           ))}

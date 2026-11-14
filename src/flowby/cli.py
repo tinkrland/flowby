@@ -140,20 +140,31 @@ def cmd_look(args) -> int:
     from . import looks as looksmod
     try:
         shelf = looksmod.catalogue(args.looks)
-        if args.eject:
+        if args.place:
+            if len(args.look) != 1:
+                raise looksmod.LookRefused("place takes one look, because a placement is one node")
+            from .scene import Scene
+            payload = looksmod.place(Scene(id="board", title="placed"), args.look[0],
+                                     preset=args.preset, mode=args.mode, shelf=shelf)
+        elif args.eject:
             if len(args.look) != 1:
                 raise looksmod.LookRefused("eject takes one look, because it opens one graph")
             payload = looksmod.eject(args.look[0], model=args.model, mode=args.mode, looks=shelf)
         else:
             payload = looksmod.compile_looks(tuple(args.look), model=args.model, mode=args.mode,
                                              prompt=args.prompt, looks=shelf).as_dict()
-    except looksmod.LookRefused as exc:
+    except (looksmod.LookRefused, presets.PresetRefused) as exc:
         print(str(exc), file=sys.stderr)
         return 2
     if args.json:
         print(json.dumps(payload, indent=2))
         return 0
-    if args.eject:
+    if args.place:
+        print(f"{payload['name']} placed as {payload['element']}, with {len(payload['nodes'])} nodes behind it:")
+        for node in payload["nodes"]:
+            print(f"  {node}")
+        print(f"sliders set: {payload['values'] or 'nothing'}")
+    elif args.eject:
         print(f"{payload['name']} as {len(payload['steps'])} steps:")
         for step in payload["steps"]:
             print(f"  {step['op']:14} {step['label']}")
@@ -706,6 +717,8 @@ def build_parser() -> argparse.ArgumentParser:
     one.add_argument("--prompt", default="", help="the sentence the directions wrap around")
     one.add_argument("--looks", default="looks")
     one.add_argument("--eject", action="store_true", help="show the steps a board would hold")
+    one.add_argument("--place", action="store_true", help="put the look on a board as nodes")
+    one.add_argument("--preset", default="text-to-image", help="the preset the look feeds when placed")
     one.add_argument("--json", action="store_true")
     one.set_defaults(func=cmd_look)
     subs.add_parser("legend", help="the four wires").set_defaults(func=cmd_legend)

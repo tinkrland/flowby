@@ -13,10 +13,12 @@ the surface, all of it:
     POST /api/remove             {element}
     POST /api/undo   POST /api/redo
     GET  /api/presets            the menu the command bar reads
-    GET  /api/kits               the preset kits, each member with its true state
+    GET  /api/kits               the preset kits, each member with its true state and whether a look words it
+    GET  /api/looks              the look catalogue: one group per slot, with each look's families and refuses
     GET  /api/plugs              the gpus plugged in, never with a token
     POST /api/plugs/add          {label, provider, endpoint, token?, tunnel?}   a token goes in and never comes out
     POST /api/plugs/check        {id}   really asks the server, the only way a plug becomes up
+    POST /api/looks/place        {look, preset?, mode?}   a look becomes a text node plus the preset that reads it
     POST /api/plugs/remove       {id}
 
 what it is strict about, because it faces a browser and a browser is not a trusted caller:
@@ -43,6 +45,7 @@ from urllib.parse import urlparse
 
 from . import flora as floramod
 from . import kits as kitmod
+from . import looks as looksmod
 from . import plug as plugmod
 from . import presets as presetmod
 from .session import Session, SessionRefused
@@ -185,7 +188,17 @@ def make_server(session: Session, host: str = "127.0.0.1", port: int = 0,
             if path == "/api/plugs":
                 return self._json(200, {"plugs": plugs.all(), "providers": {k: v for k, v in plugmod.PROVIDERS.items()}, "auth": plugmod.AUTH_NOTE})
             if path == "/api/kits":
-                return self._json(200, kitmod.menu(presets=presetmod.PRESETS))
+                # the look catalogue goes in so a member can say it is worded rather than only listed
+                try:
+                    shelf = session.looks
+                except looksmod.LookRefused as problem:
+                    return self._json(200, {**kitmod.menu(presets=presetmod.PRESETS), "looks": str(problem)})
+                return self._json(200, kitmod.menu(presets=presetmod.PRESETS, looks=shelf))
+            if path == "/api/looks":
+                try:
+                    return self._json(200, looksmod.shelf(session.looks))
+                except looksmod.LookRefused as problem:
+                    return self._refuse(422, str(problem))
             match = re.fullmatch(r"/api/assets/(sha256:[0-9a-f]{64})", path)
             if match:
                 try:
@@ -255,6 +268,9 @@ def make_server(session: Session, host: str = "127.0.0.1", port: int = 0,
                 "/api/value": lambda f: session.set_value(self._need(f, "instance"), self._need(f, "slider"), self._need(f, "value")),
                 "/api/rename": lambda f: session.rename(self._need(f, "element"), self._need(f, "label")),
                 "/api/remove": lambda f: session.remove(self._need(f, "element")),
+                "/api/looks/place": lambda f: session.place_look(self._need(f, "look"),
+                                                                 f.get("preset") or "text-to-image",
+                                                                 f.get("mode") or "image"),
                 "/api/undo": lambda f: session.undo(),
                 "/api/redo": lambda f: session.redo(),
             }

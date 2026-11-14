@@ -19,6 +19,7 @@ import { Inspector } from "./Inspector";
 import { panel, summary } from "./inspector.mjs";
 import { GpuPlug } from "./GpuPlug";
 import { KitsMenu } from "./KitsMenu";
+import { LIVE, afterPlacing, choose } from "./board.mjs";
 import { Viewer } from "./Viewer";
 import { boardPlan, psdLayers, FIDELITY as PSD_FIDELITY } from "./psd.mjs";
 import { isNarrow, viewerRows } from "./viewer.mjs";
@@ -56,6 +57,8 @@ function useNarrow() {
 
 function App() {
   const [doc, setDoc] = useState<GraphDocument | null>(null);
+  // which board this is: python's, or the committed snapshot. the page never leaves this unsaid
+  const [source, setSource] = useState<string | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [placed, setPlaced] = useState<PlacedElement[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -162,14 +165,22 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // python's board first, the committed snapshot second. a page that only read the snapshot could not
+  // show anything a button had placed, which made every action on the server invisible here.
+  const loadBoard = useCallback(async () => {
+    const [snapshot, live] = await Promise.all([
+      fetch("/graph.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch("/api/board").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
+    const picked = choose({ live, snapshot });
+    setDoc(picked.doc as GraphDocument | null);
+    setSource(picked.kind);
+    if (!picked.doc) setError(picked.note);
+    return picked;
+  }, []);
+
   useEffect(() => {
-    fetch("/graph.json")
-      .then((response) => {
-        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-        return response.json() as Promise<GraphDocument>;
-      })
-      .then(setDoc)
-      .catch((problem: Error) => setError(`run npm run graph. ${problem.message}`));
+    void loadBoard().catch((problem: Error) => setError(`run npm run graph. ${problem.message}`));
     // the history is optional: a board with no book is a board whose nodes have never run, and the
     // panel says exactly that rather than refusing to open
     fetch("/inspector.json")
@@ -276,7 +287,10 @@ function App() {
         >
           {rail === "library" ? (
             <RailPanel title="Library" blurb="preset kits: a style is listed until its images are gathered and it is trained, and only a trained one can be used.">
-              <KitsMenu embedded />
+              <KitsMenu embedded onPlaced={(answer) => {
+                setNote(afterPlacing(answer, source));
+                if (!answer?.refused) void loadBoard();
+              }} />
             </RailPanel>
           ) : null}
           {rail === "settings" ? (
