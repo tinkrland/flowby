@@ -1,0 +1,26 @@
+{
+  "id": "look.oil-paint",
+  "kind": "look",
+  "version": 1,
+  "kit": "paint",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "params": {
+    "steps": 32
+  },
+  "name": "oil paint",
+  "description": "Loaded bristle on canvas: ridges that catch the light, colour mixed on the surface rather than beside it, and a canvas weave showing through the thin parts.",
+  "slot": "medium",
+  "prompt": {
+    "default": "an oil painting: thick loaded bristle strokes with visible ridges catching the light, colours mixed wet into one another on the surface, canvas weave showing through the thin passages, edges worked rather than outlined",
+    "flux": "an oil painting on canvas, impasto ridges standing proud and catching the light, wet-in-wet mixing left visible, thin scumbled passages where the weave shows through, worked edges",
+    "sdxl": "oil painting, impasto, visible brushstrokes, canvas weave, wet-in-wet colour, painterly"
+  }
+}

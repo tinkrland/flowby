@@ -1,0 +1,26 @@
+{
+  "id": "look.watercolour",
+  "kind": "look",
+  "version": 1,
+  "kit": "paint",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "params": {
+    "steps": 32
+  },
+  "name": "watercolour",
+  "description": "Wet pigment on damp paper: pale even washes that stop at a hard edge where they dried, and granulation in the hollows where the paper's tooth held the colour.",
+  "slot": "medium",
+  "prompt": {
+    "default": "a watercolour painting: transparent pigment pooled on damp paper, pale even washes that fade rather than end, a hard dried edge where each wash stopped, granulation settling into the hollows of the tooth, the white of the paper doing the light",
+    "flux": "a watercolour painting on cold-pressed paper, transparent washes laid wet-in-wet, colour pooling and blooming at the edges, hard dried rims where a wash stopped, granulation in the tooth, unpainted paper left as the brightest light",
+    "sdxl": "watercolor painting, transparent washes, wet edges, paper texture, granulation, delicate, unpainted white paper"
+  }
+}

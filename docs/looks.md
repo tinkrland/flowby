@@ -45,7 +45,7 @@ What was flowby's own:
 
 - **The slots.** nodetool's slots are video grammar: move, rig, speed, stock, grade, lighting, era, ramp.
   A mark on paper is not a camera. The three here are `mark` (how the line was made), `surface` (what it
-  was made on) and `finish` (what happened to it after), plus an unused `medium` for the analog kit. The
+  was made on) and `finish` (what happened to it after), plus `medium` (what the paint itself did). The
   axes are orthogonal on purpose: a stack of three says something none of the three says alone, and two
   marks cannot stack because "crayon and charcoal" is a request to shade one picture two ways.
 - **Commas, not spaces.** Their fragments are sentences meant to run on after a shot description. These
@@ -125,7 +125,8 @@ button at all.
   slot-by-slot panel for it yet: placing is reached from the kits menu, not from a look's own page.
 - **No pin.** A placed look records its preset and values, but a board placement does not hold a recipe
   version, so improving a look can still change a board that used it.
-- **`medium` is empty.** No analog look exists; the analog kit's nine members are still `listed`.
+- **`analog` and `textile` are unwritten.** Neither kit has a look yet, so their members are still
+  `listed`. `medium` used to be the empty slot; the paint kit fills it.
 - **Two families.** `flux` (dev, schnell) and `sdxl` (turbo) are the families flowby's presets actually
   run on. A third model means a third fragment per look, which is the cost of the design and the reason
   `default` is mandatory.

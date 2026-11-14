@@ -1,0 +1,26 @@
+{
+  "id": "look.ink-wash",
+  "kind": "look",
+  "version": 1,
+  "kit": "paint",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "params": {
+    "steps": 32
+  },
+  "name": "ink wash",
+  "description": "Diluted ink: grey tones built from a single pigment, pooled darker where the brush rested, and a wet bleed that carries shape edges out of focus.",
+  "slot": "medium",
+  "prompt": {
+    "default": "an ink wash painting: one black pigment diluted into greys, tonal areas built in pooled layers, darker where the brush rested, soft wet bleeds carrying the edges out of focus, the light left as bare paper",
+    "flux": "an ink wash painting in diluted black ink on paper, layered grey tones, pooled darker at the edge of each wash, a soft bleed into damp paper, bare paper as the light, no colour",
+    "sdxl": "ink wash painting, diluted black ink, grey tones, wet bleeds, sumi-e, bare paper light"
+  }
+}

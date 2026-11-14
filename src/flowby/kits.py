@@ -152,7 +152,26 @@ TEXTILE = Kit(
     ),
 )
 
-KITS: dict[str, Kit] = {k.id: k for k in (ANALOG, HANDDRAWN, TEXTILE)}
+#
+# paint: the owner's point (2026-11-14), from vectary's own picker: the styles worth taking are already
+# there, watercolour among them. this is the kit the empty `medium` slot was holding a place for: analog
+# is what a press or a hot tool leaves, handdrawn is what a tool leaves when a hand drags it, and paint is
+# what a wet medium does to itself after the hand has gone (pooling, blooming, the dried rim of a wash).
+# so the line is the solvent, not the brush.
+
+PAINT = Kit(
+    id="paint",
+    label="paint",
+    blurb="the look of a wet medium left to do what it does: pool, bloom, and dry at the edge",
+    members=(
+        Member("watercolour", "watercolour", blurb="transparent washes on damp paper, a hard dried rim where each one stopped, granulation in the hollows of the tooth", look="look.watercolour"),
+        Member("gouache", "gouache", blurb="opaque matte colour in flat shapes, chalky bloom, one shape laid over another because the paint covers", look="look.gouache"),
+        Member("ink-wash", "ink wash", blurb="one pigment diluted into greys, pooled darker where the brush rested, wet bleeds carrying the edges soft", look="look.ink-wash"),
+        Member("oil-paint", "oil paint", blurb="loaded bristle ridges catching the light, colour mixed wet into itself, canvas weave through the thin passages", look="look.oil-paint"),
+    ),
+)
+
+KITS: dict[str, Kit] = {k.id: k for k in (ANALOG, HANDDRAWN, PAINT, TEXTILE)}
 
 
 def get(kit_id: str) -> Kit:

@@ -34,13 +34,14 @@ class TheCatalogue(unittest.TestCase):
     def setUp(self):
         self.shelf = looks.catalogue("looks")
 
-    def test_the_handdrawn_kit_is_worded_and_the_others_are_honest_about_not_being(self):
+    def test_a_kit_with_wording_words_all_of_it_and_the_others_say_they_do_not(self):
+        # handdrawn and paint are worded end to end; analog and textile are not worded at all. a kit that
+        # worded half its members would be the confusing case, so the rule is all or none.
         menu = kits.menu(presets=presets.PRESETS, looks=self.shelf)
-        by_kit = {kit["id"]: kit for kit in menu["kits"]}
         for kit in menu["kits"]:
             worded = [row for row in kit["members"] if row["worded"]]
-            if kit["id"] == "handdrawn":
-                self.assertEqual(len(worded), kit["total"], "every handdrawn member should have its wording")
+            if kit["id"] in ("handdrawn", "paint"):
+                self.assertEqual(len(worded), kit["total"], f"every {kit['id']} member should have its wording")
             else:
                 self.assertEqual(worded, [], f"{kit['id']} has no looks yet and should say so")
         # and no kit claims a look that is not in the catalogue: that is the same lie as a dead preset
@@ -263,9 +264,57 @@ class TheShelf(unittest.TestCase):
                 self.assertEqual(shelf[look["id"]].slot, group["slot"])
 
     def test_an_empty_slot_is_not_drawn(self):
-        shelf = looks.catalogue("looks")
+        # the whole catalogue fills every slot now, so the rule is checked on a shelf that really has a
+        # gap: a slot with no looks must not appear as an empty heading
+        shelf = {k: v for k, v in looks.catalogue("looks").items() if v.slot != "medium"}
         panel = looks.shelf(shelf)
         self.assertNotIn("medium", [group["slot"] for group in panel["groups"]])
+        self.assertEqual(len(panel["groups"]), len({v.slot for v in shelf.values()}))
+
+
+class ThePaintMedium(unittest.TestCase):
+    """paint: the kit that fills the `medium` slot, added from the owner's point (2026-11-14) that the
+    watercolour-style families already exist in the products he sent and can be taken rather than invented.
+
+    the rule these tests hold is the line that makes the kit more than a list: paint is the slot whose job
+    is what the *medium* does once the hand has gone, so every paint member must sit in `medium` and no
+    two of them can share a brief. if one drifted into `mark` it would stack with crayon and the kit would
+    stop meaning anything.
+    """
+
+    def setUp(self):
+        self.shelf = looks.catalogue("looks")
+        self.paint = {i: l for i, l in self.shelf.items() if l.kit == "paint"}
+
+    def test_the_four_paint_members_exist_and_all_are_wording(self):
+        self.assertEqual(sorted(self.paint), ["look.gouache", "look.ink-wash", "look.oil-paint",
+                                              "look.watercolour"])
+
+    def test_every_paint_member_occupies_the_medium_slot(self):
+        self.assertEqual({l.slot for l in self.paint.values()}, {"medium"},
+                         "a paint look in another slot would stack beside a medium instead of replacing one")
+
+    def test_every_paint_member_words_every_family_and_a_default(self):
+        for look in self.paint.values():
+            self.assertIn("default", look.prompt, f"{look.id} must work for a model nobody anticipated")
+            for family in looks.FAMILIES:
+                self.assertIn(family, look.prompt, f"{look.id} says nothing to {family}")
+
+    def test_two_paints_in_one_brief_are_refused_naming_both(self):
+        with self.assertRaises(looks.LookRefused) as caught:
+            looks.compile_looks(("look.watercolour", "look.gouache"), model="flux-dev", mode="image",
+                                prompt="", looks=self.shelf)
+        self.assertIn("watercolour", str(caught.exception))
+        self.assertIn("gouache", str(caught.exception))
+
+    def test_a_paint_medium_composes_with_a_surface_and_a_finish(self):
+        done = looks.compile_looks(("look.watercolour", "look.paper-tooth", "look.flat-scan"),
+                                   model="flux-dev", mode="image", prompt="a heron on a jetty",
+                                   looks=self.shelf)
+        words = done.prompt.lower()
+        self.assertIn("watercolour", words)
+        self.assertIn("heron on a jetty", words, "the subject still comes last")
+        self.assertEqual(len({self.shelf[i].slot for i in done.applied}), 3)
 
 
 if __name__ == "__main__":

@@ -80,7 +80,7 @@ class Reading(Base):
     def test_the_kits_are_served_with_every_member_listed_and_none_runnable(self):
         status, body, _ = self.live.call("GET", "/api/kits")
         self.assertEqual(status, 200)
-        self.assertEqual([k["id"] for k in body["kits"]], ["analog", "handdrawn", "textile"])
+        self.assertEqual([k["id"] for k in body["kits"]], ["analog", "handdrawn", "paint", "textile"])
         members = [m for k in body["kits"] for m in k["members"]]
         # counted from the declaration rather than pinned, so adding a member to a kit does not fail a
         # server test for a server reason; a member that goes missing on the wire still fails here

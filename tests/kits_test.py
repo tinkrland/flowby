@@ -32,10 +32,11 @@ class TheOwnersLists(unittest.TestCase):
         self.assertEqual((by["woven"].kind, by["woven"].parent), ("subtype", "textile"))
         self.assertIsNone(by["textile"].parent)
 
-    def test_the_kits_are_the_three_that_were_asked_for(self):
-        # analog and textile on 2026-11-09, handdrawn on 2026-11-13. a fourth would be somebody's idea,
-        # not the owner's, so the list is pinned rather than merely counted.
-        self.assertEqual(list(kits.KITS), ["analog", "handdrawn", "textile"])
+    def test_the_kits_are_the_four_that_were_asked_for(self):
+        # analog and textile on 2026-11-09, handdrawn on 2026-11-13, paint on 2026-11-14 (the owner's
+        # point that the watercolour-style families already exist and can be taken). a fifth would be
+        # somebody's idea, not the owner's, so the list is pinned rather than merely counted.
+        self.assertEqual(list(kits.KITS), ["analog", "handdrawn", "paint", "textile"])
 
     def test_handdrawn_holds_the_marks_named_and_nothing_pressed_or_carved(self):
         self.assertEqual([m.id for m in kits.HANDDRAWN.members],
@@ -146,7 +147,7 @@ class RefusedWhenBuilt(unittest.TestCase):
     def test_asking_for_a_kit_that_does_not_exist_names_the_ones_that_do(self):
         with self.assertRaises(KitRefused) as cm:
             kits.get("pottery")
-        self.assertIn("analog, handdrawn, textile", str(cm.exception))
+        self.assertIn("analog, handdrawn, paint, textile", str(cm.exception))
 
 
 class Shape(unittest.TestCase):
@@ -159,7 +160,7 @@ class Shape(unittest.TestCase):
     def test_the_menu_is_plain_json(self):
         import json
         out = json.loads(json.dumps(kits.menu()))
-        self.assertEqual([k["id"] for k in out["kits"]], ["analog", "handdrawn", "textile"])
+        self.assertEqual([k["id"] for k in out["kits"]], ["analog", "handdrawn", "paint", "textile"])
         by = {k["id"]: k for k in out["kits"]}
         self.assertEqual(by["handdrawn"]["total"], len(kits.HANDDRAWN.members))
         self.assertEqual(by["textile"]["total"], 3)

@@ -1,0 +1,26 @@
+{
+  "id": "look.gouache",
+  "kind": "look",
+  "version": 1,
+  "kit": "paint",
+  "modes": [
+    "image",
+    "image_edit"
+  ],
+  "inputs": [
+    "text"
+  ],
+  "stackable": true,
+  "conflicts": [],
+  "params": {
+    "steps": 32
+  },
+  "name": "gouache",
+  "description": "Opaque paint, drier than watercolour: flat matte shapes with a chalky bloom where the pigment settled, and one shape painted over another because it covers.",
+  "slot": "medium",
+  "prompt": {
+    "default": "a gouache painting: opaque matte colour in flat shapes, chalky and slightly blooming, one shape painted over another because the paint covers, soft settled edges and no shine",
+    "flux": "a gouache illustration, opaque matte pigment in flat clearly separated shapes, chalky bloom where it dried, later shapes painted over earlier ones, a soft dry edge, no gloss",
+    "sdxl": "gouache painting, opaque matte flat colour, chalky, poster-like, soft edges, painterly"
+  }
+}
