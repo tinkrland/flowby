@@ -84,6 +84,33 @@ the recipe:
 its starting value and target, output, models, estimate, and the steps. `--json` emits the panel a page
 would draw.
 
+## the card, drawn
+
+The card has three doors and they all call `recipes.card`, so the terminal, the wire and the panel cannot
+describe one board three ways: `flowby recipe <element> --card`, `GET /api/recipes`, and the **library**
+rail slot.
+
+The panel is `web/src/RecipeCard.tsx`, split in two on purpose. `RecipeCardBody` is pure: it takes the view
+model from `web/src/recipe.mjs` and draws it, which is what the render test mounts with no server and no
+fetch. `RecipeShelf` is the only part that talks to python, and it loads when the library slot is opened
+rather than when the board mounts.
+
+`recipe.mjs` owns what the card *claims*, and three of those claims are tested because each one has a way
+of going quietly wrong:
+
+- **a required mark only where required.** A mark on a control that already has a saved example teaches
+  people to ignore marks, so an input is never marked; the mark lives on a slot with nothing in it.
+- **a fixed setting is drawn as fixed.** The chain sets `keep=0.5` and the card cannot change it, so it is
+  listed under "fixed by the chain" as a sentence, not a slider. Folding it into Advanced would hide a
+  decision behind a fold.
+- **a blocked run says why on the page.** The reason is a line beside the button, not only its tooltip.
+  (The first render test passed with the visible line deleted, because the title attribute also carried the
+  string; it now matches `role="note"`.)
+
+Advanced holds only the seed and starts closed: one seed does not earn the space above the button. Needs
+always states cost, and free-to-run with paid weights reads `free to run here, paid weights` rather than
+"free".
+
 ## what is still not built
 
 - **Nothing pins a version yet.** `Placement` exists and is tested; no board placement holds one, because
@@ -91,7 +118,7 @@ would draw.
 - **The brief is checked for length, not for shape.** Refusing a brief that names none of its inputs
   would be guesswork over English, so the imperative rule is documented here and followed in the CLI's
   own briefs (`bring your own sketch and get mesh back`) rather than enforced by a regex.
-- **No shelf of recipes exists.** `shelf()` and `facets()` work on a list; the demo board produces two
-  chains and one of them is empty.
+- **No filtering yet.** `shelf()` and `facets()` work on a list and the rail lists every card, but there
+  is no facet UI: the counts exist and nothing draws them.
 - **Categories are the wire kind** (`record["kind"]`) in the CLI's own recipes, not the 27-way taxonomy a
   browsing index needs.

@@ -133,3 +133,68 @@ test("the header button never claims more than the kits hold", async () => {
   const off = renderToStaticMarkup(React.createElement(KitButton, { kits: [kit], reachable: false }));
   assert.match(off, /server is not running/);
 });
+
+// --- the recipe card, drawn -------------------------------------------------------------------------
+// the words are checked in recipe.test.mjs; this checks the page agrees with them. the two failures it
+// exists for: a fixed setting drawn so it looks adjustable, and a disabled run button with no reason
+// anywhere on the page (a tooltip is not a reason).
+
+const recipeBundle = build({
+  entryPoints: [path.join(here, "recipe-entry.tsx")],
+  bundle: true, format: "esm", platform: "node", outfile: out.replace("panel-", "recipe-"), jsx: "automatic",
+  external: ["react", "react-dom", "react-dom/server"], logLevel: "error",
+}).then(() => import(`file://${out.replace("panel-", "recipe-")}`));
+
+const card = {
+  name: "heron sketch",
+  brief: "transform a sketch into a painted still",
+  version: "3e2e52", author: "the board", output: "image",
+  inputs: [{ label: "fidelity", means: "obey the drawing, or drift", required: false,
+             example: { kind: "value", value: 6 }, target: { preset: "sketch-to-render", param: "fidelity" } }],
+  slots: [{ preset: "style-transfer", slot: "look", filled: false, required: true }],
+  advanced: [{ preset: "sketch-to-render", name: "seed", value: 41, means: "another roll of the dice" }],
+  hidden: [{ preset: "sketch-to-render", name: "keep", value: 0.5, means: "runs at 0.5; the card has no control for it" }],
+  needs: { runtime: "the machine you are on", gpu: false, cost: "free", weights: ["sdxl-turbo"], files: [], paid: true },
+  run: { label: "run", enabled: false, blocked_by: ["the look slot on style-transfer"] },
+};
+
+test("the card draws what it is, what it wants, and what it cannot change", async () => {
+  const { RenderCard } = await recipeBundle;
+  const html = renderToStaticMarkup(React.createElement(RenderCard, { card }));
+  assert.match(html, /heron sketch/);
+  assert.match(html, /v3e2e52 · the board/);
+  assert.match(html, /obey the drawing, or drift/);
+  assert.match(html, /nothing in it/);            // the empty slot says so where it is drawn
+  assert.match(html, /fixed by the chain/);
+  assert.match(html, /sketch-to-render\.keep runs at 0\.5/);
+  assert.match(html, /free to run here, paid weights/);
+});
+
+test("the advanced fold is closed, so the seed does not sit above the button uninvited", async () => {
+  const { RenderCard } = await recipeBundle;
+  const html = renderToStaticMarkup(React.createElement(RenderCard, { card }));
+  assert.match(html, /advanced/);
+  assert.doesNotMatch(html, /another roll of the dice/, "the fold is shut until a person opens it");
+});
+
+test("a blocked run says why on the page, and its button is disabled", async () => {
+  const { RenderCard } = await recipeBundle;
+  const html = renderToStaticMarkup(React.createElement(RenderCard, { card }));
+  // the reason has to be a line on the page, not the button's tooltip: the title attribute also carries
+  // it, so a bare substring match here would pass with the visible note deleted (it did, once)
+  assert.match(html, /<div role="note"[^>]*>blocked by the look slot on style-transfer</);
+  assert.match(html, /<button[^>]*disabled/);
+});
+
+test("a card that can run draws an enabled button and no reason line", async () => {
+  const { RenderCard } = await recipeBundle;
+  const ok = { ...card, slots: [], run: { label: "run", enabled: true, blocked_by: [] } };
+  const html = renderToStaticMarkup(React.createElement(RenderCard, { card: ok }));
+  assert.doesNotMatch(html, /disabled/);
+  assert.doesNotMatch(html, /blocked by/);
+});
+
+test("a payload that is not a card draws nothing rather than an empty frame", async () => {
+  const { RenderCard } = await recipeBundle;
+  assert.equal(renderToStaticMarkup(React.createElement(RenderCard, { card: {} })), "<em>no card</em>");
+});

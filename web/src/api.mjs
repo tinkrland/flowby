@@ -66,6 +66,8 @@ export function client({ base = "", fetcher = globalThis.fetch } = {}) {
     removePlug: (id) => call("POST", "/api/plugs/remove", { id }),
     kits: () => call("GET", "/api/kits"),
     looks: () => call("GET", "/api/looks"),
+    // the board's own chains as cards. python builds the card; the panel only draws it
+    recipes: () => call("GET", "/api/recipes"),
     // a look becomes a text node plus the preset that reads it. the answer is the whole board back, so
     // the caller does not have to guess what changed
     placeLook: (look, extra = {}) => call("POST", "/api/looks/place", { look, ...extra }),

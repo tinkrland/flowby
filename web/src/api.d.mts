@@ -12,6 +12,7 @@ export interface Client {
   removePlug(id: string): Promise<{ plugs: PlugView[] }>;
   kits(): Promise<any>;
   looks(): Promise<any>;
+  recipes(): Promise<any>;
   placeLook(look: string, extra?: { preset?: string; mode?: string }): Promise<any>;
 }
 export function client(options?: { base?: string; fetcher?: typeof fetch }): Client;

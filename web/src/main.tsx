@@ -19,6 +19,7 @@ import { Inspector } from "./Inspector";
 import { panel, summary } from "./inspector.mjs";
 import { GpuPlug } from "./GpuPlug";
 import { KitsMenu } from "./KitsMenu";
+import { RecipeShelf } from "./RecipeCard";
 import { LIVE, afterPlacing, choose } from "./board.mjs";
 import { Viewer } from "./Viewer";
 import { boardPlan, psdLayers, FIDELITY as PSD_FIDELITY } from "./psd.mjs";
@@ -286,11 +287,15 @@ function App() {
           onRun={() => setRan(`would run ${selected.length} node${selected.length === 1 ? "" : "s"}: the worker is not connected to this page`)}
         >
           {rail === "library" ? (
-            <RailPanel title="Library" blurb="preset kits: a style is listed until its images are gathered and it is trained, and only a trained one can be used.">
+            <RailPanel title="Library" blurb="preset kits and this board's recipes: a style is listed until it is trained, and a recipe is a chain you can read before running.">
               <KitsMenu embedded onPlaced={(answer) => {
                 setNote(afterPlacing(answer, source));
                 if (!answer?.refused) void loadBoard();
               }} />
+              {/* the board's own chains, as the card a stranger reads: same payload the cli draws */}
+              <div style={{ marginTop: 14, borderTop: "1px solid #26262a", paddingTop: 12 }}>
+                <RecipeShelf embedded />
+              </div>
             </RailPanel>
           ) : null}
           {rail === "settings" ? (
